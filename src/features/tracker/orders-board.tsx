@@ -362,7 +362,7 @@ export function OrdersBoard({
         status,
         supplier,
         owner,
-        next,
+        ...(board.followUp ? [next] : []),
         updated
       ];
     }

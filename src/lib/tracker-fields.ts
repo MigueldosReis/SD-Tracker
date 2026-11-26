@@ -170,7 +170,7 @@ export const BOARDS: readonly BoardDef[] = [
     title: 'MRP Project Orders',
     description: 'Mr Price Group project orders: upgrades, relocations and other store changes',
     groups: ['Mr Price Project Orders'],
-    followUp: true,
+    followUp: false,
     mrp: true
   },
   {
