@@ -8,9 +8,10 @@ import {
   MONEY_FIELDS,
   ORDER_FIELDS,
   STATUS_REQUIRES,
+  belongsTo,
   boardFor,
   getBoard,
-  isBoardId,
+  isStoredBoardId,
   withStoreCode,
   type BoardId,
   type Order,
@@ -36,6 +37,9 @@ function migrate(d: DatabaseSync) {
     (d.prepare('PRAGMA table_info(orders)').all() as { name: string }[]).map((c) => c.name)
   );
   const missing = ORDER_FIELDS.filter((f) => !have.has(f));
+  // Landlord Approval became a view of MRP Project Orders: anything stored on it goes back to its source.
+  if (have.has('board'))
+    d.exec(`UPDATE orders SET board = 'mrp-projects' WHERE board = 'landlord-approval'`);
   if (missing.length === 0) return;
   d.exec('BEGIN');
   try {
@@ -63,10 +67,16 @@ const SELECT_COLS = ['id', ...ORDER_FIELDS].map((f) => `"${f}"`).join(', ');
 // node:sqlite returns rows with a null prototype; Next.js can only pass plain objects to Client Components.
 const plain = <T extends object>(row: T): T => ({ ...row });
 
-export function listOrders(board: BoardId): Order[] {
+export function listOrders(boardId: BoardId): Order[] {
+  const board = getBoard(boardId);
+  if (!board) return [];
+  const statuses = board.view?.statuses ?? [];
+  const where = board.view
+    ? `board = ? AND status IN (${statuses.map(() => '?').join(', ')})`
+    : 'board = ?';
   const rows = db()
-    .prepare(`SELECT ${SELECT_COLS} FROM orders WHERE board = ? ORDER BY updatedAt DESC`)
-    .all(board) as unknown as Order[];
+    .prepare(`SELECT ${SELECT_COLS} FROM orders WHERE ${where} ORDER BY updatedAt DESC`)
+    .all(board.view?.source ?? board.id, ...statuses) as unknown as Order[];
   return rows.map(plain);
 }
 
@@ -87,7 +97,7 @@ export function boardSummaries(): BoardSummary[] {
     let open = 0,
       followUpsDue = 0;
     for (const o of rows) {
-      if (o.board !== b.id || !isOpen(o)) continue;
+      if (!belongsTo(b, o) || !isOpen(o)) continue;
       open++;
       if (b.followUp) {
         const due = nextFollowUp(o.lastFollowUp as string | null, o.createdAt as string | null);
@@ -152,7 +162,8 @@ export function updateOrder(id: string, patch: Record<string, unknown>): Order {
     } else if (typeof raw === 'string') v = raw.trim();
     else throw new ValidationError(`${f} must be text`, f);
     if (f === 'groupName' && !v) throw new ValidationError('Group cannot be empty', f);
-    if (f === 'board' && !isBoardId(v)) throw new ValidationError('Unknown board', f);
+    if (f === 'board' && !isStoredBoardId(v))
+      throw new ValidationError('Orders cannot be moved to that board', f);
     if (f === 'lastFollowUp' && v !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(v))) {
       throw new ValidationError('Last follow-up must be a date (YYYY-MM-DD)', f);
     }
@@ -244,6 +255,13 @@ export function createOrder(init: {
 }): Order {
   const board = getBoard(init.board);
   if (!board) throw new ValidationError('Unknown board', 'board');
+  if (board.view) {
+    const source = getBoard(board.view.source)!;
+    throw new ValidationError(
+      `Add the order on ${source.title}; it shows here once its status is a landlord approval step`,
+      'board'
+    );
+  }
   const storeCode = init.storeCode?.trim() || null;
   if (board.mrp && !storeCode)
     throw new ValidationError('A store code is needed for Mr Price orders', 'storeCode');

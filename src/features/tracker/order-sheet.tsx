@@ -35,7 +35,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  BOARDS,
+  STORED_BOARDS,
   EDITABLE_FIELDS,
   MONEY_FIELDS,
   OWNERS,
@@ -182,7 +182,7 @@ export function OrderSheet({
         id,
         f,
         value(f),
-        BOARDS.map((b) => ({ value: b.id, label: b.title })),
+        STORED_BOARDS.map((b) => ({ value: b.id, label: b.title })),
         (v) => {
           const target = getBoard(v);
           // Moving to another board puts the order in that board's first group.

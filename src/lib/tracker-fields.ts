@@ -134,7 +134,19 @@ export type BoardDef = {
   followUp: boolean;
   /** Mr Price store board: a store code is required and the site name always carries it. */
   mrp: boolean;
+  /**
+   * A view board holds no orders of its own: it shows the orders of `source` whose status is one of `statuses`.
+   * Orders are added on the source board and leave the view when their status moves on.
+   */
+  view?: { source: BoardId; statuses: readonly string[] };
 };
+
+/** Statuses that mean an MRP project store is in landlord approval (the last two are legacy statuses). */
+export const LANDLORD_STATUSES = [
+  'Awaiting Landlord Approval',
+  'Awaiting Landlord Docs - Supplier',
+  'Awaiting Landlord Docs - Client'
+] as const;
 
 export const BOARDS: readonly BoardDef[] = [
   {
@@ -180,16 +192,28 @@ export const BOARDS: readonly BoardDef[] = [
   {
     id: 'landlord-approval',
     title: 'Landlord Approval',
-    description: 'Landlord and wayleave approvals being chased',
-    groups: ['Awaiting Landlord Approval'],
+    description: 'MRP project stores waiting on landlord approval',
+    groups: ['Mr Price Project Orders'],
     followUp: true,
-    mrp: false
+    mrp: true,
+    view: { source: 'mrp-projects', statuses: LANDLORD_STATUSES }
   }
 ];
 
 export const getBoard = (id: string): BoardDef | undefined => BOARDS.find((b) => b.id === id);
 export const isBoardId = (id: unknown): id is BoardId =>
   typeof id === 'string' && (BOARD_IDS as readonly string[]).includes(id);
+/** Boards an order can be stored on (view boards only show orders from their source board). */
+export const STORED_BOARDS: readonly BoardDef[] = BOARDS.filter((b) => !b.view);
+export const isStoredBoardId = (id: unknown): id is BoardId =>
+  STORED_BOARDS.some((b) => b.id === id);
+
+/** Whether an order shows on a board. */
+export function belongsTo(board: BoardDef, o: { board?: unknown; status?: unknown }): boolean {
+  if (board.view)
+    return o.board === board.view.source && board.view.statuses.includes(String(o.status ?? ''));
+  return o.board === board.id;
+}
 
 export const isMrpCustomer = (customer: unknown) => /\bmr\s*price\b/i.test(String(customer ?? ''));
 
@@ -199,7 +223,7 @@ export const isMrpCustomer = (customer: unknown) => /\bmr\s*price\b/i.test(Strin
  */
 export function boardFor(o: { groupName?: unknown; customer?: unknown; ref?: unknown }): BoardId {
   const group = String(o.groupName ?? '');
-  for (const b of BOARDS) if (b.id !== 'orders' && b.groups.includes(group)) return b.id;
+  for (const b of STORED_BOARDS) if (b.id !== 'orders' && b.groups.includes(group)) return b.id;
   if (isMrpCustomer(o.customer) || /^mr price/i.test(group)) {
     return /new\s*stores?\b/i.test(String(o.ref ?? '')) ? 'mrp-new-stores' : 'mrp-projects';
   }

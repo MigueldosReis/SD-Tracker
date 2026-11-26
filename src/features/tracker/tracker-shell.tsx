@@ -22,7 +22,7 @@ import {
   SidebarTrigger,
   useSidebar
 } from '@/components/ui/sidebar';
-import type { BoardDef } from '@/lib/tracker-fields';
+import { getBoard, type BoardDef } from '@/lib/tracker-fields';
 import { BOARD_ICONS, boardHref, type Summary } from './shared';
 
 const itemClass =
@@ -77,8 +77,9 @@ export function TrackerShell({
 function BoardsSidebar({ active, summaries }: { active: string; summaries: Summary[] }) {
   const { setOpenMobile } = useSidebar();
   const main = summaries.filter((s) => s.id === 'orders');
-  const mrp = summaries.filter((s) => s.id.startsWith('mrp-'));
-  const chase = summaries.filter((s) => s.id !== 'orders' && !s.id.startsWith('mrp-'));
+  const isMrp = (s: Summary) => getBoard(s.id)?.mrp ?? false;
+  const mrp = summaries.filter(isMrp);
+  const chase = summaries.filter((s) => s.id !== 'orders' && !isMrp(s));
   const section = (label: string, items: Summary[]) => (
     <SidebarGroup className='group-data-[collapsible=icon]:px-1'>
       <SidebarGroupLabel>{label}</SidebarGroupLabel>

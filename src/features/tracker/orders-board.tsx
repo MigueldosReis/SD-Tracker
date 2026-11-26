@@ -35,13 +35,15 @@ import {
 } from '@/components/ui/table';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { BoardDef, Order } from '@/lib/tracker-fields';
+import Link from 'next/link';
+import { belongsTo, getBoard, type BoardDef, type Order } from '@/lib/tracker-fields';
 import { FOLLOW_UP_WORKING_DAYS, todayZA } from '@/lib/working-days';
 import { cn } from '@/lib/utils';
 import { OrderSheet } from './order-sheet';
 import {
   BASE_STATUSES,
   BOARD_ICONS,
+  boardHref,
   CLOSED,
   dueDate,
   followUpOf,
@@ -104,12 +106,12 @@ export function OrdersBoard({
   const applyOrder = useCallback(
     (order: Order) => {
       setOrders((prev) =>
-        order.board === board.id
+        belongsTo(board, order)
           ? prev.map((o) => (o.id === order.id ? order : o))
           : prev.filter((o) => o.id !== order.id)
       );
     },
-    [board.id]
+    [board]
   );
 
   const send = useCallback(
@@ -230,7 +232,7 @@ export function OrdersBoard({
       .filter((g) => !known.includes(g) && !CLOSED.includes(g))
       .toSorted();
     return [...known, ...unknown, ...CLOSED]
-      .filter((g) => map.has(g) || (!filtering && known.includes(g)))
+      .filter((g) => map.has(g) || (!filtering && !board.view && known.includes(g)))
       .map((g) => ({ name: g, rows: map.get(g) ?? [] }));
   }, [filtered, filtering, board]);
 
@@ -449,9 +451,15 @@ export function OrdersBoard({
             <p className='text-muted-foreground text-sm text-pretty'>{board.description}</p>
           </div>
         </div>
-        <Button onClick={() => startAdding(board.groups[0])}>
-          <Icons.add /> New Order
-        </Button>
+        {board.view ? (
+          <Button variant='outline' render={<Link href={boardHref(board.view.source)} />}>
+            <Icons.add /> Add on {getBoard(board.view.source)?.title}
+          </Button>
+        ) : (
+          <Button onClick={() => startAdding(board.groups[0])}>
+            <Icons.add /> New Order
+          </Button>
+        )}
       </div>
 
       <section aria-label='Summary' className='grid grid-cols-2 gap-3 lg:grid-cols-4'>
@@ -589,6 +597,12 @@ export function OrdersBoard({
               <p className='font-medium'>
                 {filtering ? 'No orders match these filters' : 'No orders on this board yet'}
               </p>
+              {!filtering && board.view && (
+                <p className='text-muted-foreground max-w-md text-sm text-pretty'>
+                  {getBoard(board.view.source)?.title} orders show here while their status is{' '}
+                  {board.view.statuses.join(', ')}, and leave once it moves on.
+                </p>
+              )}
               {filtering && (
                 <Button variant='outline' size='sm' onClick={resetFilters}>
                   Reset Filters
@@ -626,7 +640,7 @@ export function OrdersBoard({
                       {rows.length.toLocaleString('en-ZA')}
                     </Badge>
                   </CollapsibleTrigger>
-                  {!CLOSED.includes(name) && (
+                  {!CLOSED.includes(name) && !board.view && (
                     <Button variant='ghost' size='sm' onClick={() => startAdding(name)}>
                       <Icons.add /> Add Order
                     </Button>
