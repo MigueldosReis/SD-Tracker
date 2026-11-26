@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { parseAsBoolean, parseAsString, useQueryStates } from 'nuqs';
+import Link from 'next/link';
+import { parseAsBoolean, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -35,10 +36,12 @@ import {
 } from '@/components/ui/table';
 import { Toggle } from '@/components/ui/toggle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import Link from 'next/link';
+import { stepState, type StepState } from '@/lib/journey';
 import { belongsTo, getBoard, type BoardDef, type Order } from '@/lib/tracker-fields';
 import { FOLLOW_UP_WORKING_DAYS, todayZA } from '@/lib/working-days';
 import { cn } from '@/lib/utils';
+import { CalendarView, KanbanView } from './board-views';
+import { BulkBar } from './bulk-bar';
 import { OrderSheet } from './order-sheet';
 import {
   BASE_STATUSES,
@@ -62,8 +65,18 @@ import { TrackerShell } from './tracker-shell';
 
 const ROW_CAP = 100;
 const ALL = '__all__';
+const VIEWS = ['table', 'kanban', 'calendar'] as const;
+type View = (typeof VIEWS)[number];
+const VIEW_LABEL: Record<View, string> = { table: 'Table', kanban: 'Kanban', calendar: 'Calendar' };
 
 type Column = { key: string; header: string; cell: (o: Order) => ReactNode; className?: string };
+type BulkResult = { id: string; ok: boolean; error?: string; order?: Order };
+
+/** How a row is named to screen readers: the store on MRP boards, else customer and site. */
+const rowLabel = (board: BoardDef, o: Order) =>
+  board.mrp
+    ? siteName(board, o) || 'Untitled store'
+    : [str(o.customer), str(o.site)].filter(Boolean).join(', ') || 'Untitled order';
 
 const toggleIn = (set: Set<string>, name: string) => {
   const n = new Set(set);
@@ -87,19 +100,24 @@ export function OrdersBoard({
   summaries: Summary[];
 }) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
-  // Filters and the open order live in the URL, so a view can be bookmarked or shared.
-  const [{ q, status: statusFilter, due: dueOnly, order: openId }, setUrl] = useQueryStates(
-    {
-      q: parseAsString.withDefault(''),
-      status: parseAsString.withDefault(''),
-      due: parseAsBoolean.withDefault(false),
-      order: parseAsString
-    },
-    { history: 'replace' }
-  );
+  // Filters, the view and the open order live in the URL, so a view can be bookmarked or shared.
+  const [{ q, status: statusFilter, due: dueOnly, late: lateOnly, view, order: openId }, setUrl] =
+    useQueryStates(
+      {
+        q: parseAsString.withDefault(''),
+        status: parseAsString.withDefault(''),
+        due: parseAsBoolean.withDefault(false),
+        late: parseAsBoolean.withDefault(false),
+        view: parseAsStringLiteral(VIEWS).withDefault('table'),
+        order: parseAsString
+      },
+      { history: 'replace' }
+    );
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set(CLOSED));
   const [showAll, setShowAll] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const today = todayZA();
 
   // Keep the local list in step with the server; an order moved to another board leaves this one.
@@ -122,7 +140,7 @@ export function OrdersBoard({
         body: JSON.stringify(body)
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok)
+      if (!res.ok) {
         return {
           ok: false,
           error: String(
@@ -130,6 +148,7 @@ export function OrdersBoard({
           ),
           field: data.field
         };
+      }
       applyOrder(data.order as Order);
       return { ok: true, order: data.order as Order, log: (data.log ?? []) as LogEntry[] };
     },
@@ -153,11 +172,19 @@ export function OrdersBoard({
       });
       if (!res.ok) return false;
       setOrders((p) => p.filter((o) => o.id !== id));
+      setSelected((s) => without(s, id));
       void setUrl({ order: null });
       return true;
     },
     [setUrl]
   );
+
+  const steps = useMemo(() => {
+    const m = new Map<string, StepState>();
+    for (const o of orders) if (isOpen(o)) m.set(o.id, stepState(o, today));
+    return m;
+  }, [orders, today]);
+  const isLateStep = useCallback((o: Order) => steps.get(o.id)?.late ?? false, [steps]);
 
   const extraStatuses = useMemo(() => {
     const seen = new Set(BASE_STATUSES);
@@ -172,27 +199,28 @@ export function OrdersBoard({
       dueToday = 0,
       upcoming = 0,
       completed = 0,
-      cancelled = 0,
-      installs = 0;
+      installs = 0,
+      late = 0;
     for (const o of orders) {
       if (o.groupName === 'Completed' || o.status === 'Complete') completed++;
-      else if (o.groupName === 'Cancelled' || o.status === 'Cancelled') cancelled++;
       if (!isOpen(o)) continue;
       open++;
+      if (isLateStep(o)) late++;
       if (o.installDate && isoDate(o.installDate) >= today) installs++;
       const f = followUpOf(board, o, today);
       if (f?.state === 'overdue') overdue++;
       else if (f?.state === 'due') dueToday++;
       else if (f) upcoming++;
     }
-    return { open, overdue, dueToday, upcoming, completed, cancelled, installs };
-  }, [orders, board, today]);
+    return { open, overdue, dueToday, upcoming, completed, installs, late };
+  }, [orders, board, today, isLateStep]);
 
-  const filtering = q.trim() !== '' || statusFilter !== '' || dueOnly;
+  const filtering = q.trim() !== '' || statusFilter !== '' || dueOnly || lateOnly;
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return orders.filter((o) => {
       if (statusFilter && o.status !== statusFilter) return false;
+      if (lateOnly && !isLateStep(o)) return false;
       if (dueOnly) {
         const f = followUpOf(board, o, today);
         if (!f || f.state === 'upcoming') return false;
@@ -209,7 +237,7 @@ export function OrdersBoard({
         o.owner
       ].some((v) => str(v).toLowerCase().includes(needle));
     });
-  }, [orders, q, statusFilter, dueOnly, board, today]);
+  }, [orders, q, statusFilter, dueOnly, lateOnly, board, today, isLateStep]);
 
   const groups = useMemo(() => {
     const map = new Map<string, Order[]>();
@@ -262,20 +290,71 @@ export function OrdersBoard({
     [followUp, board]
   );
 
+  async function runBulk(body: Record<string, unknown>, label: string) {
+    const ids = [...selected];
+    setBulkBusy(true);
+    const res = await fetch('/api/tracker/orders/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, ...body })
+    });
+    const data = await res.json().catch(() => ({}));
+    setBulkBusy(false);
+    if (!res.ok) {
+      toast.error(
+        String(
+          data.error ?? 'Could not change the selected orders. Refresh the page and try again.'
+        )
+      );
+      return;
+    }
+    const results = (data.results ?? []) as BulkResult[];
+    const failed = results.filter((r) => !r.ok);
+    if (body.delete) {
+      const gone = new Set(results.filter((r) => r.ok).map((r) => r.id));
+      setOrders((p) => p.filter((o) => !gone.has(o.id)));
+    } else for (const r of results) if (r.ok && r.order) applyOrder(r.order);
+    setSelected(new Set(failed.map((r) => r.id)));
+    const done = results.length - failed.length;
+    if (failed.length === 0) toast.success(`${label}: ${done} ${done === 1 ? 'order' : 'orders'}`);
+    else {
+      toast.warning(`${label}: ${done} done, ${failed.length} not changed`, {
+        description: `${failed[0].error}${failed.length > 1 ? ' (and others; they stay selected)' : ''}`
+      });
+    }
+  }
+
   const columns = useMemo<Column[]>(() => {
     const title = (o: Order) => siteName(board, o) || str(o.customer);
     const dash = <span className='text-muted-foreground'>—</span>;
     const status: Column = {
       key: 'status',
       header: 'Status',
-      className: 'w-56 max-w-56',
-      cell: (o) => (
-        <StatusMenu
-          status={str(o.status)}
-          label={title(o)}
-          onChange={(s) => onStatusChange(o, s)}
-        />
-      )
+      className: 'w-64 max-w-64',
+      cell: (o) => {
+        const st = steps.get(o.id);
+        return (
+          <span className='flex min-w-0 items-center gap-1.5'>
+            <StatusMenu
+              status={str(o.status)}
+              label={title(o)}
+              onChange={(s) => onStatusChange(o, s)}
+            />
+            {st?.late && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={<span />}
+                  className='bg-destructive/15 text-destructive shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums'
+                >
+                  <span className='sr-only'>Late: </span>
+                  {st.daysLate > 0 ? `+${st.daysLate}d` : 'Late'}
+                </TooltipTrigger>
+                <TooltipContent>Late for this step · {st.summary}</TooltipContent>
+              </Tooltip>
+            )}
+          </span>
+        );
+      }
     };
     const updated: Column = {
       key: 'updated',
@@ -330,9 +409,21 @@ export function OrdersBoard({
       header,
       className: 'max-w-72',
       cell: (o) => (
-        <div className='min-w-0'>
-          <div className='truncate font-medium'>{main(o) || '—'}</div>
-          {sub(o) && <div className='text-muted-foreground truncate text-xs'>{sub(o)}</div>}
+        <div className='flex min-w-0 items-center gap-2'>
+          <div className='min-w-0 flex-1'>
+            <div className='truncate font-medium'>{main(o) || '—'}</div>
+            {sub(o) && <div className='text-muted-foreground truncate text-xs'>{sub(o)}</div>}
+          </div>
+          {o.updateCount ? (
+            <span
+              className='text-muted-foreground flex shrink-0 items-center gap-0.5 text-xs tabular-nums'
+              title={`${o.updateCount} updates`}
+            >
+              <Icons.chat aria-hidden className='size-3.5' />
+              {o.updateCount}
+              <span className='sr-only'> updates</span>
+            </span>
+          ) : null}
         </div>
       )
     });
@@ -407,7 +498,7 @@ export function OrdersBoard({
       },
       updated
     ];
-  }, [board, today, onStatusChange, onFollowUpRow]);
+  }, [board, today, steps, onStatusChange, onFollowUpRow]);
 
   async function addOrder(groupName: string, customer: string, site: string, storeCode: string) {
     const res = await fetch('/api/tracker/orders', {
@@ -427,6 +518,7 @@ export function OrdersBoard({
   }
 
   function startAdding(group: string) {
+    void setUrl({ view: null });
     setAdding((a) => (a === group ? null : group));
     setCollapsed((c) => without(c, group));
   }
@@ -436,8 +528,12 @@ export function OrdersBoard({
     s.id === board.id ? { ...s, open: stats.open, followUpsDue: stats.overdue + stats.dueToday } : s
   );
   const BoardIcon = BOARD_ICONS[board.id];
-  const resetFilters = () => void setUrl({ q: null, status: null, due: null });
+  const resetFilters = () => void setUrl({ q: null, status: null, due: null, late: null });
   const dueTotal = stats.overdue + stats.dueToday;
+  const groupNames = [
+    ...new Set([...board.groups, ...CLOSED, ...orders.map((o) => str(o.groupName))])
+  ].filter(Boolean);
+  const openOrder = (id: string) => void setUrl({ order: id });
 
   return (
     <TrackerShell board={board} summaries={nav}>
@@ -452,7 +548,15 @@ export function OrdersBoard({
           </div>
         </div>
         {board.view ? (
-          <Button variant='outline' render={<Link href={boardHref(board.view.source)} />}>
+          <Button
+            variant='outline'
+            render={
+              <Link
+                href={boardHref(board.view.source)}
+                aria-label={`Add an order on ${getBoard(board.view.source)?.title}`}
+              />
+            }
+          >
             <Icons.add /> Add on {getBoard(board.view.source)?.title}
           </Button>
         ) : (
@@ -464,26 +568,32 @@ export function OrdersBoard({
 
       <section aria-label='Summary' className='grid grid-cols-2 gap-3 lg:grid-cols-4'>
         <Stat label='Open orders' value={stats.open} icon={<Icons.page />} />
+        <Stat
+          label='Late for their step'
+          value={stats.late}
+          tone={stats.late ? 'danger' : undefined}
+          icon={<Icons.alertCircle />}
+          active={lateOnly}
+          onClick={() => void setUrl({ late: !lateOnly || null })}
+          hint='Longer than usual in their status, or booked date passed'
+        />
         {board.followUp ? (
           <>
             <Stat
-              label='Follow-ups overdue'
-              value={stats.overdue}
-              tone={stats.overdue ? 'danger' : undefined}
-              icon={<Icons.alertCircle />}
+              label='Follow-ups due'
+              value={dueTotal}
+              tone={stats.overdue ? 'danger' : stats.dueToday ? 'warning' : undefined}
+              icon={<Icons.phoneCall />}
               active={dueOnly}
               onClick={() => void setUrl({ due: !dueOnly || null })}
+              hint={
+                stats.overdue
+                  ? `${stats.overdue} overdue, ${stats.dueToday} due today`
+                  : `${stats.upcoming} coming up`
+              }
             />
             <Stat
-              label='Due today'
-              value={stats.dueToday}
-              tone={stats.dueToday ? 'warning' : undefined}
-              icon={<Icons.clock />}
-              active={dueOnly}
-              onClick={() => void setUrl({ due: !dueOnly || null })}
-            />
-            <Stat
-              label='Upcoming'
+              label='Upcoming follow-ups'
               value={stats.upcoming}
               icon={<Icons.calendar />}
               hint={`Every ${FOLLOW_UP_WORKING_DAYS} working days, skipping weekends & SA public holidays`}
@@ -498,13 +608,12 @@ export function OrdersBoard({
               hint='Open orders with an install date from today'
             />
             <Stat label='Completed' value={stats.completed} icon={<Icons.circleCheck />} />
-            <Stat label='Cancelled' value={stats.cancelled} icon={<Icons.circleX />} />
           </>
         )}
       </section>
 
       <div className='flex flex-wrap items-center gap-2'>
-        <InputGroup className='w-full sm:w-80'>
+        <InputGroup className='w-full sm:w-72'>
           <InputGroupAddon>
             <Icons.search aria-hidden />
           </InputGroupAddon>
@@ -536,7 +645,7 @@ export function OrdersBoard({
           value={statusFilter || ALL}
           onValueChange={(v) => void setUrl({ status: v === ALL ? null : String(v) })}
         >
-          <SelectTrigger aria-label='Filter by status' className='w-full sm:w-64'>
+          <SelectTrigger aria-label='Filter by status' className='w-full sm:w-56'>
             <Icons.filter aria-hidden className='text-muted-foreground' />
             <SelectValue>{(v: string) => (v === ALL ? 'All statuses' : v)}</SelectValue>
           </SelectTrigger>
@@ -566,6 +675,16 @@ export function OrdersBoard({
             )}
           </SelectContent>
         </Select>
+        <Toggle
+          variant='outline'
+          pressed={lateOnly}
+          onPressedChange={(p) => void setUrl({ late: p || null })}
+        >
+          <Icons.alertCircle /> Late
+          <Badge variant={stats.late ? 'destructive' : 'secondary'} className='tabular-nums'>
+            {stats.late}
+          </Badge>
+        </Toggle>
         {board.followUp && (
           <Toggle
             variant='outline'
@@ -583,161 +702,246 @@ export function OrdersBoard({
             <Icons.close /> Reset
           </Button>
         )}
-        <span className='text-muted-foreground ml-auto text-sm tabular-nums' aria-live='polite'>
-          {filtered.length.toLocaleString('en-ZA')} of {orders.length.toLocaleString('en-ZA')}{' '}
-          orders
-        </span>
+        <div className='ml-auto flex items-center gap-3'>
+          <span className='text-muted-foreground text-sm tabular-nums' aria-live='polite'>
+            {filtered.length.toLocaleString('en-ZA')} of {orders.length.toLocaleString('en-ZA')}
+          </span>
+          <div role='group' aria-label='View' className='bg-muted flex rounded-lg p-0.5'>
+            {VIEWS.map((v) => (
+              <button
+                key={v}
+                type='button'
+                aria-pressed={view === v}
+                onClick={() => void setUrl({ view: v === 'table' ? null : v })}
+                className={cn(
+                  'focus-visible:ring-ring/50 rounded-md px-3 py-1 text-sm outline-none focus-visible:ring-3',
+                  view === v
+                    ? 'bg-background font-medium shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {VIEW_LABEL[v]}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className='flex flex-col gap-4'>
-        {groups.length === 0 && (
-          <Card className='items-center py-12 text-center'>
-            <CardContent className='flex flex-col items-center gap-2'>
-              <Icons.search className='text-muted-foreground size-8' aria-hidden />
-              <p className='font-medium'>
-                {filtering ? 'No orders match these filters' : 'No orders on this board yet'}
-              </p>
-              {!filtering && board.view && (
-                <p className='text-muted-foreground max-w-md text-sm text-pretty'>
-                  {getBoard(board.view.source)?.title} orders show here while their status is{' '}
-                  {board.view.statuses.join(', ')}, and leave once it moves on.
+      {view === 'kanban' && (
+        <KanbanView
+          board={board}
+          orders={filtered}
+          today={today}
+          onOpen={openOrder}
+          onStatusChange={onStatusChange}
+        />
+      )}
+      {view === 'calendar' && (
+        <CalendarView board={board} orders={filtered} today={today} onOpen={openOrder} />
+      )}
+
+      {view === 'table' && (
+        <div className='flex flex-col gap-4'>
+          {groups.length === 0 && (
+            <Card className='items-center py-12 text-center'>
+              <CardContent className='flex flex-col items-center gap-2'>
+                <Icons.search className='text-muted-foreground size-8' aria-hidden />
+                <p className='font-medium'>
+                  {filtering ? 'No orders match these filters' : 'No orders on this board yet'}
                 </p>
-              )}
-              {filtering && (
-                <Button variant='outline' size='sm' onClick={resetFilters}>
-                  Reset Filters
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        )}
-        {groups.map(({ name, rows }) => {
-          const isCollapsed = filtering ? false : collapsed.has(name);
-          const visible = showAll.has(name) ? rows : rows.slice(0, ROW_CAP);
-          const color = groupColor(name);
-          return (
-            <Card key={name} className='gap-0 overflow-hidden py-0'>
-              <Collapsible
-                open={!isCollapsed}
-                onOpenChange={() => setCollapsed((c) => toggleIn(c, name))}
-              >
-                <div
-                  className='flex items-center justify-between gap-2 px-3 py-2'
-                  style={{ boxShadow: `inset 4px 0 0 ${color}` }}
+                {!filtering && board.view && (
+                  <p className='text-muted-foreground max-w-md text-sm text-pretty'>
+                    {getBoard(board.view.source)?.title} orders show here while their status is{' '}
+                    {board.view.statuses.join(', ')}, and leave once it moves on.
+                  </p>
+                )}
+                {filtering && (
+                  <Button variant='outline' size='sm' onClick={resetFilters}>
+                    Reset Filters
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          {groups.map(({ name, rows }) => {
+            const isCollapsed = filtering ? false : collapsed.has(name);
+            const visible = showAll.has(name) ? rows : rows.slice(0, ROW_CAP);
+            const color = groupColor(name);
+            const allSel = visible.length > 0 && visible.every((o) => selected.has(o.id));
+            const someSel = !allSel && visible.some((o) => selected.has(o.id));
+            return (
+              <Card key={name} className='gap-0 overflow-hidden py-0'>
+                <Collapsible
+                  open={!isCollapsed}
+                  onOpenChange={() => setCollapsed((c) => toggleIn(c, name))}
                 >
-                  <CollapsibleTrigger className='hover:bg-muted/60 focus-visible:ring-ring/50 flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left outline-none focus-visible:ring-3'>
-                    <Icons.chevronRight
-                      aria-hidden
-                      className={cn(
-                        'text-muted-foreground size-4 shrink-0 transition-transform motion-reduce:transition-none',
-                        !isCollapsed && 'rotate-90'
-                      )}
-                    />
-                    <span className='truncate font-semibold' style={{ color }}>
-                      {name}
-                    </span>
-                    <Badge variant='secondary' className='tabular-nums'>
-                      {rows.length.toLocaleString('en-ZA')}
-                    </Badge>
-                  </CollapsibleTrigger>
-                  {!CLOSED.includes(name) && !board.view && (
-                    <Button variant='ghost' size='sm' onClick={() => startAdding(name)}>
-                      <Icons.add /> Add Order
-                    </Button>
-                  )}
-                </div>
-                <CollapsibleContent>
-                  {adding === name && (
-                    <AddOrderRow
-                      board={board}
-                      groupName={name}
-                      onAdd={addOrder}
-                      onCancel={() => setAdding(null)}
-                    />
-                  )}
-                  {rows.length === 0 && adding !== name && (
-                    <p className='text-muted-foreground border-t px-5 py-4 text-sm'>
-                      No orders in this group yet.
-                    </p>
-                  )}
-                  {rows.length > 0 && (
-                    <div className='border-t'>
-                      <Table className='min-w-[960px]'>
-                        <TableHeader className='bg-muted/40'>
-                          <TableRow className='hover:bg-transparent'>
-                            {columns.map((c) => (
-                              <TableHead
-                                key={c.key}
-                                className='text-muted-foreground h-9 text-xs font-medium'
-                              >
-                                {c.header}
+                  <div
+                    className='flex items-center justify-between gap-2 px-3 py-2'
+                    style={{ boxShadow: `inset 4px 0 0 ${color}` }}
+                  >
+                    <CollapsibleTrigger className='hover:bg-muted/60 focus-visible:ring-ring/50 flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left outline-none focus-visible:ring-3'>
+                      <Icons.chevronRight
+                        aria-hidden
+                        className={cn(
+                          'text-muted-foreground size-4 shrink-0 transition-transform motion-reduce:transition-none',
+                          !isCollapsed && 'rotate-90'
+                        )}
+                      />
+                      <span className='truncate font-semibold' style={{ color }}>
+                        {name}
+                      </span>
+                      <Badge variant='secondary' className='tabular-nums'>
+                        {rows.length.toLocaleString('en-ZA')}
+                      </Badge>
+                    </CollapsibleTrigger>
+                    {!CLOSED.includes(name) && !board.view && (
+                      <Button variant='ghost' size='sm' onClick={() => startAdding(name)}>
+                        <Icons.add /> Add Order
+                      </Button>
+                    )}
+                  </div>
+                  <CollapsibleContent>
+                    {adding === name && (
+                      <AddOrderRow
+                        board={board}
+                        groupName={name}
+                        onAdd={addOrder}
+                        onCancel={() => setAdding(null)}
+                      />
+                    )}
+                    {rows.length === 0 && adding !== name && (
+                      <p className='text-muted-foreground border-t px-5 py-4 text-sm'>
+                        No orders in this group yet.
+                      </p>
+                    )}
+                    {rows.length > 0 && (
+                      <div className='border-t'>
+                        <Table className='min-w-[1000px]'>
+                          <TableHeader className='bg-muted/40'>
+                            <TableRow className='hover:bg-transparent'>
+                              <TableHead className='h-9 w-10 pl-4'>
+                                <input
+                                  type='checkbox'
+                                  className='accent-primary size-4 cursor-pointer align-middle'
+                                  checked={allSel}
+                                  ref={(el) => {
+                                    if (el) el.indeterminate = someSel;
+                                  }}
+                                  aria-label={`Select all ${visible.length} shown in ${name}`}
+                                  onChange={() =>
+                                    setSelected((s) => {
+                                      const n = new Set(s);
+                                      for (const o of visible) {
+                                        if (allSel) n.delete(o.id);
+                                        else n.add(o.id);
+                                      }
+                                      return n;
+                                    })
+                                  }
+                                />
                               </TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {visible.map((o) => (
-                            <TableRow
-                              key={o.id}
-                              data-state={o.id === openId ? 'selected' : undefined}
-                              className='focus-visible:bg-muted/60 cursor-pointer outline-none [contain-intrinsic-size:auto_49px] [content-visibility:auto]'
-                              tabIndex={0}
-                              aria-label={`Open ${siteName(board, o) || str(o.customer)}`}
-                              onClick={() => void setUrl({ order: o.id })}
-                              onKeyDown={(e) => {
-                                if (
-                                  (e.key === 'Enter' || e.key === ' ') &&
-                                  e.target === e.currentTarget
-                                ) {
-                                  e.preventDefault();
-                                  void setUrl({ order: o.id });
-                                }
-                              }}
-                            >
                               {columns.map((c) => (
-                                <TableCell key={c.key} className={cn('py-2', c.className)}>
-                                  {c.cell(o)}
-                                </TableCell>
+                                <TableHead
+                                  key={c.key}
+                                  className='text-muted-foreground h-9 text-xs font-medium'
+                                >
+                                  {c.header}
+                                </TableHead>
                               ))}
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                      {rows.length > visible.length && (
-                        <div className='border-t p-2 text-center'>
-                          <Button
-                            variant='ghost'
-                            size='sm'
-                            onClick={() => setShowAll((s) => toggleIn(s, name))}
-                          >
-                            Show All {rows.length.toLocaleString('en-ZA')} Orders (
-                            {(rows.length - visible.length).toLocaleString('en-ZA')} more)
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CollapsibleContent>
-              </Collapsible>
-            </Card>
-          );
-        })}
-      </div>
+                          </TableHeader>
+                          <TableBody>
+                            {visible.map((o) => {
+                              const isSel = selected.has(o.id);
+                              return (
+                                <TableRow
+                                  key={o.id}
+                                  data-state={isSel || o.id === openId ? 'selected' : undefined}
+                                  className='focus-visible:bg-muted/60 cursor-pointer outline-none [contain-intrinsic-size:auto_49px] [content-visibility:auto]'
+                                  tabIndex={0}
+                                  aria-label={`Open ${rowLabel(board, o)}`}
+                                  onClick={() => openOrder(o.id)}
+                                  onKeyDown={(e) => {
+                                    if (
+                                      (e.key === 'Enter' || e.key === ' ') &&
+                                      e.target === e.currentTarget
+                                    ) {
+                                      e.preventDefault();
+                                      openOrder(o.id);
+                                    }
+                                  }}
+                                >
+                                  <TableCell
+                                    className='w-10 py-2 pl-4'
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type='checkbox'
+                                      className='accent-primary size-4 cursor-pointer align-middle'
+                                      checked={isSel}
+                                      aria-label={`Select ${rowLabel(board, o)}`}
+                                      onChange={() => setSelected((s) => toggleIn(s, o.id))}
+                                    />
+                                  </TableCell>
+                                  {columns.map((c) => (
+                                    <TableCell key={c.key} className={cn('py-2', c.className)}>
+                                      {c.cell(o)}
+                                    </TableCell>
+                                  ))}
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                        {rows.length > visible.length && (
+                          <div className='border-t p-2 text-center'>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              onClick={() => setShowAll((s) => toggleIn(s, name))}
+                            >
+                              Show All {rows.length.toLocaleString('en-ZA')} Orders (
+                              {(rows.length - visible.length).toLocaleString('en-ZA')} more)
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {selected.size > 0 && view === 'table' && (
+        <BulkBar
+          count={selected.size}
+          groups={groupNames}
+          busy={bulkBusy}
+          onClear={() => setSelected(new Set())}
+          onApply={(patch, label) => void runBulk({ patch }, label)}
+          onDelete={() => void runBulk({ delete: true }, 'Deleted')}
+        />
+      )}
 
       {open && (
         <OrderSheet
           key={open.id}
           board={board}
           order={open}
+          step={steps.get(open.id) ?? null}
           statuses={[...BASE_STATUSES, ...extraStatuses]}
-          groupNames={[
-            ...new Set([...board.groups, ...CLOSED, ...orders.map((o) => str(o.groupName))])
-          ].filter(Boolean)}
+          groupNames={groupNames}
           today={today}
           onClose={() => void setUrl({ order: null })}
           save={save}
           followUp={followUp}
           remove={remove}
+          onUpdatesChanged={(count) =>
+            setOrders((p) => p.map((o) => (o.id === open.id ? { ...o, updateCount: count } : o)))
+          }
         />
       )}
     </TrackerShell>

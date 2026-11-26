@@ -46,7 +46,12 @@ export const ORDER_FIELDS = [
 ] as const;
 
 export type OrderField = (typeof ORDER_FIELDS)[number];
-export type Order = { id: string } & { [K in OrderField]: string | number | null };
+export type Order = { id: string } & { [K in OrderField]: string | number | null } & {
+  /** When the order entered its current status (from the activity log), read-only. */
+  statusSince?: string | null;
+  /** Number of updates (comments) on the order, read-only. */
+  updateCount?: number;
+};
 
 /** Fields a user may edit (everything except identity and timestamps). */
 export const EDITABLE_FIELDS: readonly OrderField[] = ORDER_FIELDS.filter(

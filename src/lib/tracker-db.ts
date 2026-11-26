@@ -37,6 +37,7 @@ function migrate(d: DatabaseSync) {
     (d.prepare('PRAGMA table_info(orders)').all() as { name: string }[]).map((c) => c.name)
   );
   const missing = ORDER_FIELDS.filter((f) => !have.has(f));
+  d.exec(UPDATES_TABLE);
   // Landlord Approval became a view of MRP Project Orders: anything stored on it goes back to its source.
   if (have.has('board'))
     d.exec(`UPDATE orders SET board = 'mrp-projects' WHERE board = 'landlord-approval'`);
@@ -62,7 +63,16 @@ function migrate(d: DatabaseSync) {
   }
 }
 
-const SELECT_COLS = ['id', ...ORDER_FIELDS].map((f) => `"${f}"`).join(', ');
+export const UPDATES_TABLE = `CREATE TABLE IF NOT EXISTS order_updates (
+  n INTEGER PRIMARY KEY AUTOINCREMENT, orderId TEXT NOT NULL, at TEXT NOT NULL, author TEXT, text TEXT NOT NULL);
+  CREATE INDEX IF NOT EXISTS idx_updates_order ON order_updates(orderId);`;
+
+const SELECT_COLS =
+  ['id', ...ORDER_FIELDS].map((f) => `o."${f}"`).join(', ') +
+  // When the order entered its status: its last status change, or its creation if it was created here.
+  `, COALESCE((SELECT MAX(l.at) FROM order_log l WHERE l.orderId = o.id AND l.text LIKE 'Status changed%'),` +
+  ` CASE WHEN EXISTS (SELECT 1 FROM order_log c WHERE c.orderId = o.id AND c.text LIKE 'Order created%') THEN o.createdAt END) AS statusSince` +
+  `, (SELECT COUNT(*) FROM order_updates u WHERE u.orderId = o.id) AS updateCount`;
 
 // node:sqlite returns rows with a null prototype; Next.js can only pass plain objects to Client Components.
 const plain = <T extends object>(row: T): T => ({ ...row });
@@ -72,10 +82,10 @@ export function listOrders(boardId: BoardId): Order[] {
   if (!board) return [];
   const statuses = board.view?.statuses ?? [];
   const where = board.view
-    ? `board = ? AND status IN (${statuses.map(() => '?').join(', ')})`
-    : 'board = ?';
+    ? `o.board = ? AND o.status IN (${statuses.map(() => '?').join(', ')})`
+    : 'o.board = ?';
   const rows = db()
-    .prepare(`SELECT ${SELECT_COLS} FROM orders WHERE ${where} ORDER BY updatedAt DESC`)
+    .prepare(`SELECT ${SELECT_COLS} FROM orders o WHERE ${where} ORDER BY o.updatedAt DESC`)
     .all(board.view?.source ?? board.id, ...statuses) as unknown as Order[];
   return rows.map(plain);
 }
@@ -109,10 +119,51 @@ export function boardSummaries(): BoardSummary[] {
 }
 
 export function getOrder(id: string): Order | undefined {
-  const row = db().prepare(`SELECT ${SELECT_COLS} FROM orders WHERE id = ?`).get(id) as unknown as
-    | Order
-    | undefined;
+  const row = db()
+    .prepare(`SELECT ${SELECT_COLS} FROM orders o WHERE o.id = ?`)
+    .get(id) as unknown as Order | undefined;
   return row ? plain(row) : undefined;
+}
+
+export type UpdateEntry = {
+  n: number;
+  orderId: string;
+  at: string;
+  author: string | null;
+  text: string;
+};
+export function getUpdates(id: string): UpdateEntry[] {
+  const rows = db()
+    .prepare(
+      'SELECT n, orderId, at, author, text FROM order_updates WHERE orderId = ? ORDER BY n DESC'
+    )
+    .all(id) as unknown as UpdateEntry[];
+  return rows.map(plain);
+}
+
+/** Post an update (comment) on an order. It also counts as activity on the order. */
+export function addUpdate(id: string, text: string, author: string | null): UpdateEntry[] {
+  if (!getOrder(id)) throw new ValidationError('Order not found');
+  const body = text.trim();
+  if (!body) throw new ValidationError('Write something before posting the update');
+  if (body.length > 5000) throw new ValidationError('Updates can be at most 5,000 characters');
+  const at = nowIso();
+  const d = db();
+  d.exec('BEGIN');
+  try {
+    d.prepare('INSERT INTO order_updates (orderId, at, author, text) VALUES (?, ?, ?, ?)').run(
+      id,
+      at,
+      author?.trim() || null,
+      body
+    );
+    d.prepare('UPDATE orders SET updatedAt = ? WHERE id = ?').run(at, id);
+    d.exec('COMMIT');
+  } catch (e) {
+    d.exec('ROLLBACK');
+    throw e;
+  }
+  return getUpdates(id);
 }
 
 export type LogEntry = { n: number; orderId: string; at: string; text: string };
@@ -237,6 +288,7 @@ export function deleteOrder(id: string): boolean {
   d.exec('BEGIN');
   try {
     d.prepare('DELETE FROM order_log WHERE orderId = ?').run(id);
+    d.prepare('DELETE FROM order_updates WHERE orderId = ?').run(id);
     const r = d.prepare('DELETE FROM orders WHERE id = ?').run(id);
     d.exec('COMMIT');
     return Number(r.changes) > 0;
@@ -318,4 +370,24 @@ export function recordFollowUp(id: string, note?: string): Order {
     throw e;
   }
   return getOrder(id)!;
+}
+
+export type BulkResult = { id: string; ok: boolean; error?: string; order?: Order };
+
+/** Apply the same change to many orders. Each order goes through the same rules as a single edit. */
+export function bulkUpdate(ids: string[], patch: Record<string, unknown>): BulkResult[] {
+  return ids.map((id) => {
+    try {
+      return { id, ok: true, order: updateOrder(id, patch) };
+    } catch (e) {
+      if (e instanceof ValidationError) return { id, ok: false, error: e.message };
+      throw e;
+    }
+  });
+}
+
+export function bulkDelete(ids: string[]): BulkResult[] {
+  return ids.map((id) =>
+    deleteOrder(id) ? { id, ok: true } : { id, ok: false, error: 'Order not found' }
+  );
 }

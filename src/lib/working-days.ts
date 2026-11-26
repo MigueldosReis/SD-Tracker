@@ -109,3 +109,15 @@ export function followUpState(due: string, today: string): FollowUpState {
   if (due === today) return 'due';
   return 'upcoming';
 }
+
+/** Working days strictly after `from` up to and including `to` (0 when `to` is not after `from`). */
+export function workingDaysBetween(from: string, to: string): number {
+  let t = toTime(from.slice(0, 10));
+  const end = toTime(to.slice(0, 10));
+  let n = 0;
+  while (t < end) {
+    t += DAY;
+    if (isWorkingDay(fromTime(t))) n++;
+  }
+  return n;
+}

@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Field, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -61,6 +62,51 @@ import {
   type SaveResult
 } from './shared';
 import { FollowUpBadge, StatusBadge } from './status-controls';
+import { UpdatesPanel } from './updates-panel';
+import type { StepState } from '@/lib/journey';
+
+/** Where the order is on the 16-step journey, and whether it is late for its step. */
+function JourneyCard({ step, status }: { step: StepState; status: string }) {
+  return (
+    <div
+      className={cn(
+        'mb-5 rounded-xl border p-4',
+        step.late && 'border-destructive/40 bg-destructive/5'
+      )}
+    >
+      <div className='flex flex-wrap items-center justify-between gap-2 text-sm'>
+        <span className='font-medium'>
+          {step.step ? `Step ${step.step} of 16 · ${status}` : status || 'No status'}
+        </span>
+        {step.late && (
+          <span className='bg-destructive/15 text-destructive rounded-md px-2 py-0.5 text-xs font-medium'>
+            {step.daysLate > 0 ? `${step.daysLate} working days late` : 'Late'}
+          </span>
+        )}
+      </div>
+      {step.step ? (
+        <div className='mt-3 flex gap-0.5' aria-hidden>
+          {Array.from({ length: 16 }, (_, i) => (
+            <span
+              key={i}
+              className={cn(
+                'h-1.5 flex-1 rounded-full',
+                i < step.step! - 1
+                  ? 'bg-primary'
+                  : i === step.step! - 1
+                    ? step.late
+                      ? 'bg-destructive'
+                      : 'bg-primary/60'
+                    : 'bg-muted'
+              )}
+            />
+          ))}
+        </div>
+      ) : null}
+      <p className='text-muted-foreground mt-2 text-xs'>{step.summary}</p>
+    </div>
+  );
+}
 
 const NONE = '__none__';
 
@@ -73,7 +119,9 @@ export function OrderSheet({
   onClose,
   save,
   followUp,
-  remove
+  remove,
+  step,
+  onUpdatesChanged
 }: {
   board: BoardDef;
   order: Order;
@@ -84,11 +132,13 @@ export function OrderSheet({
   save: (id: string, body: Record<string, unknown>) => Promise<SaveResult>;
   followUp: (id: string, note?: string) => Promise<SaveResult>;
   remove: (id: string) => Promise<boolean>;
+  step: StepState | null;
+  onUpdatesChanged: (count: number) => void;
 }) {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState('details');
+  const [tab, setTab] = useState('updates');
   const [log, setLog] = useState<LogEntry[] | null>(null);
   const [note, setNote] = useState('');
   const [recording, setRecording] = useState(false);
@@ -289,9 +339,23 @@ export function OrderSheet({
           className='min-h-0 flex-1 gap-0'
         >
           <TabsList variant='line' className='w-full justify-start border-b px-5'>
+            <TabsTrigger value='updates'>
+              Updates
+              {order.updateCount ? (
+                <span className='text-muted-foreground tabular-nums'>{order.updateCount}</span>
+              ) : null}
+            </TabsTrigger>
             <TabsTrigger value='details'>Details</TabsTrigger>
             <TabsTrigger value='activity'>Activity</TabsTrigger>
           </TabsList>
+
+          <TabsContent
+            value='updates'
+            className='min-h-0 flex-1 overflow-y-auto overscroll-contain p-5'
+          >
+            {step && <JourneyCard step={step} status={str(order.status)} />}
+            <UpdatesPanel orderId={order.id} onCount={onUpdatesChanged} />
+          </TabsContent>
 
           <TabsContent
             value='details'

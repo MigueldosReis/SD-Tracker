@@ -21,11 +21,14 @@ db.exec(`
   CREATE INDEX idx_orders_board ON orders(board);
   CREATE INDEX idx_orders_status ON orders(status);
   CREATE INDEX idx_log_order ON order_log(orderId);
+  CREATE TABLE order_updates (n INTEGER PRIMARY KEY AUTOINCREMENT, orderId TEXT NOT NULL, at TEXT NOT NULL, author TEXT, text TEXT NOT NULL);
+  CREATE INDEX idx_updates_order ON order_updates(orderId);
 `);
 
 // The source data calls the group "group"; "group" is a reserved word in SQL, so we store it as groupName.
 const ins = db.prepare(`INSERT INTO orders (id, ${cols}) VALUES (?, ${ORDER_FIELDS.map(() => '?').join(', ')})`);
 const insLog = db.prepare('INSERT INTO order_log (orderId, at, text) VALUES (?, ?, ?)');
+const insUpd = db.prepare('INSERT INTO order_updates (orderId, at, author, text) VALUES (?, ?, ?, ?)');
 let n = 0, logs = 0;
 db.exec('BEGIN');
 for (const r of rows) {
@@ -33,6 +36,7 @@ for (const r of rows) {
   rec.board = boardFor(rec);
   ins.run(r.id, ...ORDER_FIELDS.map((f) => (rec[f] === undefined ? null : rec[f])));
   for (const l of r.log ?? []) { insLog.run(r.id, l.at, l.text); logs++; }
+  for (const u of r.updates ?? []) if (u && u.text) insUpd.run(r.id, u.at ?? rec.updatedAt ?? '', u.by ?? null, String(u.text));
   n++;
 }
 db.exec('COMMIT');
