@@ -1,4 +1,11 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { fontVariables } from '@/components/themes/font.config';
+import { DEFAULT_THEME } from '@/components/themes/theme.config';
+import ThemeProvider from '@/components/themes/theme-provider';
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
@@ -6,11 +13,38 @@ export const metadata: Metadata = {
   description: 'Service delivery tracking for connectivity orders'
 };
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' }
+  ]
+};
+
 // Separate root layout from the starter pages: no sign-in provider, so the tracker runs without keys.
 export default function TrackerLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang='en' className='dark' data-theme='default' suppressHydrationWarning>
-      <body className='bg-background text-foreground min-h-dvh font-sans antialiased'>{children}</body>
+    <html lang='en' data-theme={DEFAULT_THEME} suppressHydrationWarning>
+      <body
+        className={cn(
+          'bg-background text-foreground min-h-dvh overflow-x-hidden font-sans antialiased',
+          fontVariables
+        )}
+      >
+        <NuqsAdapter>
+          <ThemeProvider
+            attribute='class'
+            defaultTheme='system'
+            enableSystem
+            disableTransitionOnChange
+            enableColorScheme
+          >
+            <TooltipProvider>
+              {children}
+              <Toaster richColors closeButton position='bottom-right' />
+            </TooltipProvider>
+          </ThemeProvider>
+        </NuqsAdapter>
+      </body>
     </html>
   );
 }

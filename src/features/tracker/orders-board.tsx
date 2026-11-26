@@ -1,190 +1,79 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import Link from 'next/link';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { parseAsBoolean, parseAsString, useQueryStates } from 'nuqs';
+import { toast } from 'sonner';
+import { Icons } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import {
-  BOARDS,
-  CLOSED_GROUPS,
-  EDITABLE_FIELDS,
-  MONEY_FIELDS,
-  OTHER_STATUSES,
-  OWNERS,
-  PROCESS_STATUSES,
-  displaySite,
-  getBoard,
-  withStoreCode,
-  type BoardDef,
-  type Order,
-  type OrderField
-} from '@/lib/tracker-fields';
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput
+} from '@/components/ui/input-group';
 import {
-  FOLLOW_UP_WORKING_DAYS,
-  followUpState,
-  nextFollowUp,
-  todayZA,
-  type FollowUpState
-} from '@/lib/working-days';
-import { groupColor, statusColor } from './status-style';
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table';
+import { Toggle } from '@/components/ui/toggle';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { BoardDef, Order } from '@/lib/tracker-fields';
+import { FOLLOW_UP_WORKING_DAYS, todayZA } from '@/lib/working-days';
+import { cn } from '@/lib/utils';
+import { OrderSheet } from './order-sheet';
+import {
+  BASE_STATUSES,
+  BOARD_ICONS,
+  CLOSED,
+  dueDate,
+  followUpOf,
+  fmtDate,
+  isOpen,
+  isoDate,
+  siteName,
+  str,
+  type LogEntry,
+  type SaveResult,
+  type Summary
+} from './shared';
+import { FollowUpBadge, StatusMenu } from './status-controls';
+import { groupColor } from './status-style';
+import { TrackerShell } from './tracker-shell';
 
 const ROW_CAP = 100;
-const BOTTOM = CLOSED_GROUPS as readonly string[];
-const DEFAULT_COLLAPSED = new Set(BOTTOM);
-const BASE_STATUSES = [...PROCESS_STATUSES, ...OTHER_STATUSES] as string[];
+const ALL = '__all__';
 
-type LogEntry = { n: number; at: string; text: string };
-type Summary = { id: string; title: string; open: number; followUpsDue: number };
-type PatchResult = { ok: true; order: Order; log: LogEntry[] } | { ok: false; error: string };
+type Column = { key: string; header: string; cell: (o: Order) => ReactNode; className?: string };
 
-const isOpen = (o: Order) =>
-  !BOTTOM.includes(str(o.groupName)) && o.status !== 'Complete' && o.status !== 'Cancelled';
-const dueDate = (o: Order) =>
-  nextFollowUp(o.lastFollowUp as string | null, o.createdAt as string | null);
-/** Follow-up state of an open order on a follow-up board, or null when it needs none. */
-function followUpOf(
-  board: BoardDef,
-  o: Order,
-  today: string
-): { due: string; state: FollowUpState } | null {
-  if (!board.followUp || !isOpen(o)) return null;
-  const due = dueDate(o);
-  return due ? { due, state: followUpState(due, today) } : null;
-}
-const FOLLOW_UP_STYLE: Record<FollowUpState, string> = {
-  overdue: 'bg-red-600 text-white',
-  due: 'bg-amber-500 text-black',
-  upcoming: 'text-muted-foreground'
+const toggleIn = (set: Set<string>, name: string) => {
+  const n = new Set(set);
+  if (n.has(name)) n.delete(name);
+  else n.add(name);
+  return n;
 };
-const siteName = (board: BoardDef, o: Order) =>
-  board.mrp ? (withStoreCode(displaySite(o), str(o.storeCode)) ?? '') : str(o.site);
-
-type Column = { header: string; cell: (o: Order) => ReactNode; className?: string };
-
-const LABELS: Partial<Record<OrderField, string>> = {
-  ref: 'Reference',
-  board: 'Board',
-  groupName: 'Group',
-  lastFollowUp: 'Last follow-up',
-  customer: 'Customer',
-  site: 'Site name',
-  circuit: 'Circuit ID',
-  status: 'Status',
-  orderType: 'New or existing',
-  service: 'Service',
-  speed: 'Speed',
-  linkRole: 'Primary / secondary',
-  supplier: 'Supplier',
-  supplierService: 'Supplier service',
-  storeCode: 'Store code',
-  address: 'Address',
-  notes: 'Notes',
-  owner: 'Owner',
-  cofRequested: 'COF requested',
-  cofReceived: 'COF received',
-  coverRequested: 'Cover requested',
-  coverReceived: 'Cover received',
-  cofSigned: 'COF signed',
-  clientApproved: 'Client approved',
-  quoteSent: 'Quote sent',
-  siteSurvey: 'Site survey',
-  landlordRecvSupplier: 'Landlord docs received from supplier',
-  landlordSentClient: 'Landlord docs sent to client',
-  landlordSignedFirstnet: 'Landlord docs signed and returned to FirstNet',
-  landlordReturnedSupplier: 'Landlord docs returned to supplier',
-  installDate: 'Install scheduled',
-  cutoverDate: 'Cutover date',
-  forecastHandover: 'Forecasted handover',
-  serial: 'Equipment serial number',
-  equipment: 'Equipment make and model',
-  billingStart: 'Billing start date',
-  sellMrc: 'Sell MRC',
-  sellNrc: 'Sell NRC',
-  costMrc: 'Cost MRC',
-  costNrc: 'Cost NRC',
-  billNrc: 'Bill NRC'
+const without = (set: Set<string>, name: string) => {
+  const n = new Set(set);
+  n.delete(name);
+  return n;
 };
-
-const SECTIONS: { title: string; fields: OrderField[] }[] = [
-  {
-    title: 'Order',
-    fields: [
-      'customer',
-      'site',
-      'board',
-      'groupName',
-      'status',
-      'owner',
-      'orderType',
-      'storeCode',
-      'circuit',
-      'ref',
-      'address'
-    ]
-  },
-  {
-    title: 'Service and supplier',
-    fields: ['service', 'speed', 'linkRole', 'supplier', 'supplierService']
-  },
-  {
-    title: 'Dates',
-    fields: [
-      'quoteSent',
-      'clientApproved',
-      'cofRequested',
-      'cofReceived',
-      'cofSigned',
-      'coverRequested',
-      'coverReceived',
-      'siteSurvey',
-      'landlordRecvSupplier',
-      'landlordSentClient',
-      'landlordSignedFirstnet',
-      'landlordReturnedSupplier',
-      'installDate',
-      'cutoverDate',
-      'forecastHandover',
-      'billingStart',
-      'lastFollowUp'
-    ]
-  },
-  { title: 'Equipment', fields: ['serial', 'equipment'] },
-  { title: 'Costs', fields: ['sellMrc', 'sellNrc', 'costMrc', 'costNrc', 'billNrc'] },
-  { title: 'Notes', fields: ['notes'] }
-];
-const DATE_FIELDS = new Set<OrderField>([
-  'quoteSent',
-  'clientApproved',
-  'cofRequested',
-  'cofReceived',
-  'cofSigned',
-  'coverRequested',
-  'coverReceived',
-  'siteSurvey',
-  'landlordRecvSupplier',
-  'landlordSentClient',
-  'landlordSignedFirstnet',
-  'landlordReturnedSupplier',
-  'installDate',
-  'cutoverDate',
-  'forecastHandover',
-  'billingStart',
-  'lastFollowUp'
-]);
-
-const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
-const fmtDate = (v: unknown) => str(v).slice(0, 10);
-
-function StatusPill({ status }: { status: string | null }) {
-  return (
-    <span
-      className='inline-block rounded px-2 py-0.5 text-xs font-medium text-white'
-      style={{ background: statusColor(status) }}
-    >
-      {status || 'No status'}
-    </span>
-  );
-}
 
 export function OrdersBoard({
   board,
@@ -196,13 +85,18 @@ export function OrdersBoard({
   summaries: Summary[];
 }) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
-  const [q, setQ] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [dueOnly, setDueOnly] = useState(false);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(DEFAULT_COLLAPSED));
+  // Filters and the open order live in the URL, so a view can be bookmarked or shared.
+  const [{ q, status: statusFilter, due: dueOnly, order: openId }, setUrl] = useQueryStates(
+    {
+      q: parseAsString.withDefault(''),
+      status: parseAsString.withDefault(''),
+      due: parseAsBoolean.withDefault(false),
+      order: parseAsString
+    },
+    { history: 'replace' }
+  );
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(CLOSED));
   const [showAll, setShowAll] = useState<Set<string>>(new Set());
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [banner, setBanner] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
   const today = todayZA();
 
@@ -218,54 +112,79 @@ export function OrdersBoard({
     [board.id]
   );
 
-  const patch = useCallback(
-    async (id: string, body: Record<string, unknown>): Promise<PatchResult> => {
-      const res = await fetch(`/api/tracker/orders/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
+  const send = useCallback(
+    async (url: string, method: string, body: unknown): Promise<SaveResult> => {
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok)
-        return { ok: false, error: String(data.error ?? `Request failed (${res.status})`) };
+        return {
+          ok: false,
+          error: String(
+            data.error ?? `Request failed (${res.status}). Refresh the page and try again.`
+          ),
+          field: data.field
+        };
       applyOrder(data.order as Order);
       return { ok: true, order: data.order as Order, log: (data.log ?? []) as LogEntry[] };
     },
     [applyOrder]
   );
 
+  const save = useCallback(
+    (id: string, body: Record<string, unknown>) =>
+      send(`/api/tracker/orders/${encodeURIComponent(id)}`, 'PATCH', body),
+    [send]
+  );
   const followUp = useCallback(
-    async (id: string, note?: string): Promise<PatchResult> => {
-      const res = await fetch(`/api/tracker/orders/${encodeURIComponent(id)}/follow-up`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note })
+    (id: string, note?: string) =>
+      send(`/api/tracker/orders/${encodeURIComponent(id)}/follow-up`, 'POST', { note }),
+    [send]
+  );
+  const remove = useCallback(
+    async (id: string) => {
+      const res = await fetch(`/api/tracker/orders/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok)
-        return { ok: false, error: String(data.error ?? `Request failed (${res.status})`) };
-      applyOrder(data.order as Order);
-      return { ok: true, order: data.order as Order, log: (data.log ?? []) as LogEntry[] };
+      if (!res.ok) return false;
+      setOrders((p) => p.filter((o) => o.id !== id));
+      void setUrl({ order: null });
+      return true;
     },
-    [applyOrder]
+    [setUrl]
   );
 
-  const statuses = useMemo(() => {
+  const extraStatuses = useMemo(() => {
     const seen = new Set(BASE_STATUSES);
-    const extra = [
+    return [
       ...new Set(orders.map((o) => str(o.status)).filter((s) => s && !seen.has(s)))
-    ].sort();
-    return { base: BASE_STATUSES, extra };
+    ].toSorted();
   }, [orders]);
 
-  const dueCount = useMemo(
-    () =>
-      orders.filter((o) => {
-        const f = followUpOf(board, o, today);
-        return f && f.state !== 'upcoming';
-      }).length,
-    [orders, board, today]
-  );
+  const stats = useMemo(() => {
+    let open = 0,
+      overdue = 0,
+      dueToday = 0,
+      upcoming = 0,
+      completed = 0,
+      cancelled = 0,
+      installs = 0;
+    for (const o of orders) {
+      if (o.groupName === 'Completed' || o.status === 'Complete') completed++;
+      else if (o.groupName === 'Cancelled' || o.status === 'Cancelled') cancelled++;
+      if (!isOpen(o)) continue;
+      open++;
+      if (o.installDate && isoDate(o.installDate) >= today) installs++;
+      const f = followUpOf(board, o, today);
+      if (f?.state === 'overdue') overdue++;
+      else if (f?.state === 'due') dueToday++;
+      else if (f) upcoming++;
+    }
+    return { open, overdue, dueToday, upcoming, completed, cancelled, installs };
+  }, [orders, board, today]);
 
   const filtering = q.trim() !== '' || statusFilter !== '' || dueOnly;
   const filtered = useMemo(() => {
@@ -284,7 +203,8 @@ export function OrdersBoard({
         o.ref,
         o.storeCode,
         o.address,
-        o.supplier
+        o.supplier,
+        o.owner
       ].some((v) => str(v).toLowerCase().includes(needle));
     });
   }, [orders, q, statusFilter, dueOnly, board, today]);
@@ -296,111 +216,196 @@ export function OrdersBoard({
       if (!map.has(g)) map.set(g, []);
       map.get(g)!.push(o);
     }
-    // On follow-up boards, the most urgent follow-ups come first.
     if (board.followUp) {
-      for (const rows of map.values()) {
-        rows.sort((a, b) => {
-          const da = isOpen(a) ? (dueDate(a) ?? '9') : '9';
-          const db = isOpen(b) ? (dueDate(b) ?? '9') : '9';
-          return da.localeCompare(db);
-        });
-      }
+      // The most urgent follow-ups first.
+      const key = (o: Order) => (isOpen(o) ? (dueDate(o) ?? '9') : '9');
+      for (const [g, rows] of map)
+        map.set(
+          g,
+          rows.toSorted((a, b) => key(a).localeCompare(key(b)))
+        );
     }
-    const known = board.groups.filter((g) => !BOTTOM.includes(g));
-    const unknown = [...map.keys()].filter((g) => !known.includes(g) && !BOTTOM.includes(g)).sort();
-    const names = [...known, ...unknown, ...BOTTOM];
-    return names
+    const known = board.groups.filter((g) => !CLOSED.includes(g));
+    const unknown = [...map.keys()]
+      .filter((g) => !known.includes(g) && !CLOSED.includes(g))
+      .toSorted();
+    return [...known, ...unknown, ...CLOSED]
       .filter((g) => map.has(g) || (!filtering && known.includes(g)))
       .map((g) => ({ name: g, rows: map.get(g) ?? [] }));
   }, [filtered, filtering, board]);
 
+  const onStatusChange = useCallback(
+    async (o: Order, status: string) => {
+      const r = await save(o.id, { status });
+      if (!r.ok) {
+        toast.error(r.error, {
+          description:
+            'Fill in the missing detail in the order panel, then change the status again.'
+        });
+        void setUrl({ order: o.id });
+      } else toast.success(`Status changed to ${status}`);
+    },
+    [save, setUrl]
+  );
+
+  const onFollowUpRow = useCallback(
+    async (o: Order) => {
+      const r = await followUp(o.id);
+      if (r.ok)
+        toast.success('Follow-up recorded', {
+          description: `${siteName(board, o) || str(o.customer)} · next one in ${FOLLOW_UP_WORKING_DAYS} working days`
+        });
+      else toast.error(r.error);
+    },
+    [followUp, board]
+  );
+
   const columns = useMemo<Column[]>(() => {
-    const status: Column = { header: 'Status', cell: () => null };
+    const title = (o: Order) => siteName(board, o) || str(o.customer);
+    const dash = <span className='text-muted-foreground'>—</span>;
+    const status: Column = {
+      key: 'status',
+      header: 'Status',
+      className: 'w-56 max-w-56',
+      cell: (o) => (
+        <StatusMenu
+          status={str(o.status)}
+          label={title(o)}
+          onChange={(s) => onStatusChange(o, s)}
+        />
+      )
+    };
     const updated: Column = {
+      key: 'updated',
       header: 'Updated',
-      cell: (o) => fmtDate(o.updatedAt),
-      className: 'tabular-nums'
+      className: 'text-muted-foreground tabular-nums whitespace-nowrap',
+      cell: (o) => fmtDate(o.updatedAt)
+    };
+    const owner: Column = {
+      key: 'owner',
+      header: 'Owner',
+      className: 'whitespace-nowrap',
+      cell: (o) => str(o.owner) || dash
     };
     const next: Column = {
+      key: 'next',
       header: 'Next follow-up',
+      className: 'whitespace-nowrap',
       cell: (o) => {
         const f = followUpOf(board, o, today);
-        if (!f) return null;
+        if (!f) return dash;
         return (
-          <span className='flex items-center gap-2'>
-            <span
-              className={`rounded px-1.5 py-0.5 tabular-nums ${FOLLOW_UP_STYLE[f.state]}`}
-              title={
-                f.state === 'overdue' ? 'Overdue' : f.state === 'due' ? 'Due today' : 'Upcoming'
-              }
-            >
-              {f.due}
-            </span>
-            <button
-              className='text-primary text-xs underline'
-              onClick={async (e) => {
-                e.stopPropagation();
-                const r = await followUp(o.id);
-                if (!r.ok) setBanner(r.error);
-              }}
-            >
-              Done
-            </button>
+          <span className='flex items-center gap-1.5'>
+            <FollowUpBadge due={f.due} state={f.state} />
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon-xs'
+                    aria-label={`Record follow-up for ${title(o)}`}
+                  />
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onFollowUpRow(o);
+                }}
+              >
+                <Icons.check />
+              </TooltipTrigger>
+              <TooltipContent>Followed up today</TooltipContent>
+            </Tooltip>
           </span>
         );
       }
     };
+    const primary = (
+      header: string,
+      main: (o: Order) => string,
+      sub: (o: Order) => string
+    ): Column => ({
+      key: 'primary',
+      header,
+      className: 'max-w-72',
+      cell: (o) => (
+        <div className='min-w-0'>
+          <div className='truncate font-medium'>{main(o) || '—'}</div>
+          {sub(o) && <div className='text-muted-foreground truncate text-xs'>{sub(o)}</div>}
+        </div>
+      )
+    });
+    const supplier: Column = {
+      key: 'supplier',
+      header: 'Supplier',
+      className: 'max-w-48',
+      cell: (o) => (
+        <div className='min-w-0'>
+          <div className='truncate'>{str(o.supplier) || '—'}</div>
+          {o.supplierService ? (
+            <div className='text-muted-foreground truncate text-xs'>{str(o.supplierService)}</div>
+          ) : null}
+        </div>
+      )
+    };
+    const service = (o: Order) => [str(o.service), str(o.speed)].filter(Boolean).join(' · ');
     if (board.mrp) {
       return [
-        { header: 'Store', cell: (o) => siteName(board, o), className: 'max-w-64 truncate' },
-        { header: 'Store code', cell: (o) => str(o.storeCode), className: 'font-mono text-xs' },
+        primary('Store', (o) => siteName(board, o), service),
+        {
+          key: 'code',
+          header: 'Store code',
+          className: 'font-mono text-xs tabular-nums',
+          cell: (o) => <span translate='no'>{str(o.storeCode)}</span>
+        },
         status,
-        { header: 'Supplier', cell: (o) => str(o.supplier) },
-        { header: 'Supplier service', cell: (o) => str(o.supplierService) },
-        { header: 'Owner', cell: (o) => str(o.owner) },
+        supplier,
+        owner,
         next,
         updated
       ];
     }
-    if (board.followUp) {
+    if (board.followUp)
       return [
-        { header: 'Customer', cell: (o) => str(o.customer), className: 'max-w-56 truncate' },
-        { header: 'Site', cell: (o) => str(o.site), className: 'max-w-56 truncate' },
+        primary(
+          'Customer',
+          (o) => str(o.customer),
+          (o) => str(o.site)
+        ),
         status,
-        { header: 'Supplier', cell: (o) => str(o.supplier) },
-        { header: 'Owner', cell: (o) => str(o.owner) },
+        supplier,
+        owner,
         next,
         updated
       ];
-    }
     return [
-      { header: 'Customer', cell: (o) => str(o.customer), className: 'max-w-56 truncate' },
-      { header: 'Site', cell: (o) => str(o.site), className: 'max-w-56 truncate' },
+      primary(
+        'Customer',
+        (o) => str(o.customer),
+        (o) => str(o.site)
+      ),
       status,
-      { header: 'Circuit ID', cell: (o) => str(o.circuit), className: 'font-mono text-xs' },
-      { header: 'Supplier', cell: (o) => str(o.supplier) },
-      { header: 'Service', cell: (o) => str(o.service) },
-      { header: 'Speed', cell: (o) => str(o.speed) },
-      { header: 'Install', cell: (o) => fmtDate(o.installDate), className: 'tabular-nums' },
+      {
+        key: 'circuit',
+        header: 'Circuit ID',
+        className: 'font-mono text-xs whitespace-nowrap',
+        cell: (o) => <span translate='no'>{str(o.circuit)}</span>
+      },
+      supplier,
+      {
+        key: 'service',
+        header: 'Service',
+        className: 'whitespace-nowrap',
+        cell: (o) => service(o) || dash
+      },
+      {
+        key: 'install',
+        header: 'Install',
+        className: 'tabular-nums whitespace-nowrap',
+        cell: (o) => fmtDate(o.installDate) || dash
+      },
       updated
     ];
-  }, [board, today, followUp]);
-
-  const toggle = (set: Set<string>, name: string) => {
-    const n = new Set(set);
-    if (n.has(name)) n.delete(name);
-    else n.add(name);
-    return n;
-  };
-
-  async function onStatusChange(o: Order, status: string) {
-    setBanner(null);
-    const r = await patch(o.id, { status });
-    if (!r.ok) {
-      setBanner(`${siteName(board, o) || str(o.customer) || 'Order'}: ${r.error}`);
-      setOpenId(o.id);
-    }
-  }
+  }, [board, today, onStatusChange, onFollowUpRow]);
 
   async function addOrder(groupName: string, customer: string, site: string, storeCode: string) {
     const res = await fetch('/api/tracker/orders', {
@@ -410,293 +415,368 @@ export function OrdersBoard({
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setBanner(String(data.error ?? 'Could not add the order'));
+      toast.error(String(data.error ?? 'Could not add the order. Refresh the page and try again.'));
       return;
     }
     setOrders((prev) => [data.order as Order, ...prev]);
     setAdding(null);
-    setOpenId((data.order as Order).id);
+    toast.success('Order added');
+    void setUrl({ order: (data.order as Order).id });
+  }
+
+  function startAdding(group: string) {
+    setAdding((a) => (a === group ? null : group));
+    setCollapsed((c) => without(c, group));
   }
 
   const open = openId ? (orders.find((o) => o.id === openId) ?? null) : null;
-  const openCount = orders.filter(isOpen).length;
   const nav = summaries.map((s) =>
-    s.id === board.id ? { ...s, open: openCount, followUpsDue: dueCount } : s
+    s.id === board.id ? { ...s, open: stats.open, followUpsDue: stats.overdue + stats.dueToday } : s
   );
+  const BoardIcon = BOARD_ICONS[board.id];
+  const resetFilters = () => void setUrl({ q: null, status: null, due: null });
+  const dueTotal = stats.overdue + stats.dueToday;
 
   return (
-    <div className='flex min-h-dvh flex-col'>
-      <nav
-        aria-label='Boards'
-        className='border-border bg-card flex gap-1 overflow-x-auto border-b px-4'
-      >
-        {nav.map((s) => {
-          const active = s.id === board.id;
-          return (
-            <Link
-              key={s.id}
-              href={s.id === 'orders' ? '/orders' : `/boards/${s.id}`}
-              aria-current={active ? 'page' : undefined}
-              className={`-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm ${active ? 'border-primary font-semibold' : 'text-muted-foreground hover:text-foreground border-transparent'}`}
-            >
-              {s.title}
-              <span className='bg-muted rounded px-1.5 text-xs tabular-nums' title='Open orders'>
-                {s.open}
-              </span>
-              {s.followUpsDue > 0 && (
-                <span
-                  className='rounded bg-red-600 px-1.5 text-xs text-white tabular-nums'
-                  title='Follow-ups due or overdue'
-                >
-                  {s.followUpsDue}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-      <header className='border-border flex flex-wrap items-end justify-between gap-3 border-b px-6 py-4'>
-        <div>
-          <h1 className='text-xl font-semibold tracking-tight'>{board.title}</h1>
-          <p className='text-muted-foreground text-sm'>
-            {filtered.length.toLocaleString()} of {orders.length.toLocaleString()} orders
-            <span className='ml-2'>· {board.description}</span>
-          </p>
-          {board.followUp && (
-            <p className='text-muted-foreground text-xs'>
-              Follow up every {FOLLOW_UP_WORKING_DAYS} working days (weekends and South African
-              public holidays skipped).
-            </p>
-          )}
+    <TrackerShell board={board} summaries={nav}>
+      <div className='flex flex-wrap items-start justify-between gap-4'>
+        <div className='flex min-w-0 items-start gap-3'>
+          <div className='bg-primary/10 text-primary hidden size-10 shrink-0 items-center justify-center rounded-xl sm:flex'>
+            <BoardIcon aria-hidden className='size-5' />
+          </div>
+          <div className='min-w-0'>
+            <h1 className='text-2xl font-semibold tracking-tight text-balance'>{board.title}</h1>
+            <p className='text-muted-foreground text-sm text-pretty'>{board.description}</p>
+          </div>
         </div>
-        <div className='flex flex-wrap items-center gap-2'>
-          <Input
+        <Button onClick={() => startAdding(board.groups[0])}>
+          <Icons.add /> New Order
+        </Button>
+      </div>
+
+      <section aria-label='Summary' className='grid grid-cols-2 gap-3 lg:grid-cols-4'>
+        <Stat label='Open orders' value={stats.open} icon={<Icons.page />} />
+        {board.followUp ? (
+          <>
+            <Stat
+              label='Follow-ups overdue'
+              value={stats.overdue}
+              tone={stats.overdue ? 'danger' : undefined}
+              icon={<Icons.alertCircle />}
+              active={dueOnly}
+              onClick={() => void setUrl({ due: !dueOnly || null })}
+            />
+            <Stat
+              label='Due today'
+              value={stats.dueToday}
+              tone={stats.dueToday ? 'warning' : undefined}
+              icon={<Icons.clock />}
+              active={dueOnly}
+              onClick={() => void setUrl({ due: !dueOnly || null })}
+            />
+            <Stat
+              label='Upcoming'
+              value={stats.upcoming}
+              icon={<Icons.calendar />}
+              hint={`Every ${FOLLOW_UP_WORKING_DAYS} working days, skipping weekends & SA public holidays`}
+            />
+          </>
+        ) : (
+          <>
+            <Stat
+              label='Installs scheduled'
+              value={stats.installs}
+              icon={<Icons.calendar />}
+              hint='Open orders with an install date from today'
+            />
+            <Stat label='Completed' value={stats.completed} icon={<Icons.circleCheck />} />
+            <Stat label='Cancelled' value={stats.cancelled} icon={<Icons.circleX />} />
+          </>
+        )}
+      </section>
+
+      <div className='flex flex-wrap items-center gap-2'>
+        <InputGroup className='w-full sm:w-80'>
+          <InputGroupAddon>
+            <Icons.search aria-hidden />
+          </InputGroupAddon>
+          <InputGroupInput
+            type='search'
+            name='q'
+            autoComplete='off'
+            spellCheck={false}
             aria-label='Search orders'
             placeholder={
-              board.mrp
-                ? 'Search store, store code, supplier…'
-                : 'Search customer, site, circuit, store code…'
+              board.mrp ? 'Search store, store code, supplier…' : 'Search customer, site, circuit…'
             }
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className='w-72'
+            onChange={(e) => void setUrl({ q: e.target.value || null })}
           />
-          <select
-            aria-label='Filter by status'
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className='border-input bg-background h-8 rounded-lg border px-2 text-sm'
-          >
-            <option value=''>All statuses</option>
-            {statuses.base.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-            {statuses.extra.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          {board.followUp && (
-            <Button
-              variant={dueOnly ? 'default' : 'outline'}
-              size='sm'
-              aria-pressed={dueOnly}
-              onClick={() => setDueOnly((v) => !v)}
-            >
-              Follow-ups due ({dueCount})
-            </Button>
+          {q && (
+            <InputGroupAddon align='inline-end'>
+              <InputGroupButton
+                size='icon-xs'
+                aria-label='Clear search'
+                onClick={() => void setUrl({ q: null })}
+              >
+                <Icons.close />
+              </InputGroupButton>
+            </InputGroupAddon>
           )}
-          {filtering && (
-            <Button
-              variant='ghost'
-              size='sm'
-              onClick={() => {
-                setQ('');
-                setStatusFilter('');
-                setDueOnly(false);
-              }}
-            >
-              Clear
-            </Button>
-          )}
-        </div>
-      </header>
-
-      {banner && (
-        <div
-          role='alert'
-          className='mx-6 mt-3 flex items-center justify-between rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300'
+        </InputGroup>
+        <Select
+          value={statusFilter || ALL}
+          onValueChange={(v) => void setUrl({ status: v === ALL ? null : String(v) })}
         >
-          <span>{banner}</span>
-          <button className='ml-4 underline' onClick={() => setBanner(null)}>
-            Dismiss
-          </button>
-        </div>
-      )}
+          <SelectTrigger aria-label='Filter by status' className='w-full sm:w-64'>
+            <Icons.filter aria-hidden className='text-muted-foreground' />
+            <SelectValue>{(v: string) => (v === ALL ? 'All statuses' : v)}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>All statuses</SelectItem>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel>Delivery steps</SelectLabel>
+              {BASE_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            {extraStatuses.length > 0 && (
+              <>
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel>Legacy statuses</SelectLabel>
+                  {extraStatuses.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </>
+            )}
+          </SelectContent>
+        </Select>
+        {board.followUp && (
+          <Toggle
+            variant='outline'
+            pressed={dueOnly}
+            onPressedChange={(p) => void setUrl({ due: p || null })}
+          >
+            <Icons.phoneCall /> Follow-ups Due
+            <Badge variant={dueTotal ? 'destructive' : 'secondary'} className='tabular-nums'>
+              {dueTotal}
+            </Badge>
+          </Toggle>
+        )}
+        {filtering && (
+          <Button variant='ghost' onClick={resetFilters}>
+            <Icons.close /> Reset
+          </Button>
+        )}
+        <span className='text-muted-foreground ml-auto text-sm tabular-nums' aria-live='polite'>
+          {filtered.length.toLocaleString('en-ZA')} of {orders.length.toLocaleString('en-ZA')}{' '}
+          orders
+        </span>
+      </div>
 
-      <main className='flex flex-col gap-4 px-6 py-4'>
+      <div className='flex flex-col gap-4'>
         {groups.length === 0 && (
-          <p className='text-muted-foreground py-12 text-center'>
-            {filtering ? 'No orders match.' : 'No orders on this board yet.'}
-          </p>
+          <Card className='items-center py-12 text-center'>
+            <CardContent className='flex flex-col items-center gap-2'>
+              <Icons.search className='text-muted-foreground size-8' aria-hidden />
+              <p className='font-medium'>
+                {filtering ? 'No orders match these filters' : 'No orders on this board yet'}
+              </p>
+              {filtering && (
+                <Button variant='outline' size='sm' onClick={resetFilters}>
+                  Reset Filters
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         )}
         {groups.map(({ name, rows }) => {
           const isCollapsed = filtering ? false : collapsed.has(name);
           const visible = showAll.has(name) ? rows : rows.slice(0, ROW_CAP);
           const color = groupColor(name);
           return (
-            <section
-              key={name}
-              className='border-border overflow-hidden rounded-lg border'
-              style={{ borderLeft: `4px solid ${color}` }}
-            >
-              <div className='bg-card flex items-center justify-between px-3 py-2'>
-                <button
-                  className='flex items-center gap-2 text-left'
-                  aria-expanded={!isCollapsed}
-                  onClick={() => setCollapsed((c) => toggle(c, name))}
+            <Card key={name} className='gap-0 overflow-hidden py-0'>
+              <Collapsible
+                open={!isCollapsed}
+                onOpenChange={() => setCollapsed((c) => toggleIn(c, name))}
+              >
+                <div
+                  className='flex items-center justify-between gap-2 px-3 py-2'
+                  style={{ boxShadow: `inset 4px 0 0 ${color}` }}
                 >
-                  <span aria-hidden className='text-muted-foreground w-4 text-xs'>
-                    {isCollapsed ? '▶' : '▼'}
-                  </span>
-                  <span className='font-semibold' style={{ color }}>
-                    {name}
-                  </span>
-                  <span className='text-muted-foreground text-sm'>
-                    {rows.length.toLocaleString()} {rows.length === 1 ? 'order' : 'orders'}
-                  </span>
-                </button>
-                {!BOTTOM.includes(name) && (
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    onClick={() => setAdding(adding === name ? null : name)}
-                  >
-                    + Add order
-                  </Button>
-                )}
-              </div>
-              {adding === name && (
-                <AddOrderRow
-                  board={board}
-                  groupName={name}
-                  onAdd={addOrder}
-                  onCancel={() => setAdding(null)}
-                />
-              )}
-              {!isCollapsed && rows.length === 0 && adding !== name && (
-                <p className='text-muted-foreground px-3 py-3 text-sm'>
-                  No orders in this group yet.
-                </p>
-              )}
-              {!isCollapsed && rows.length > 0 && (
-                <div className='overflow-x-auto'>
-                  <table className='w-full min-w-[1000px] border-collapse text-sm'>
-                    <thead>
-                      <tr className='bg-muted/40 text-muted-foreground text-left text-xs uppercase'>
-                        {columns.map((c) => (
-                          <th
-                            key={c.header}
-                            scope='col'
-                            className='border-border border-r border-b px-3 py-2 font-medium last:border-r-0'
-                          >
-                            {c.header}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visible.map((o) => (
-                        <tr
-                          key={o.id}
-                          className='border-border hover:bg-muted/30 cursor-pointer border-b'
-                          onClick={() => setOpenId(o.id)}
-                        >
-                          {columns.map((c) =>
-                            c.header === 'Status' ? (
-                              <td
-                                key={c.header}
-                                className='border-border border-r p-1'
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <select
-                                  aria-label={`Status for ${siteName(board, o) || str(o.customer)}`}
-                                  value={str(o.status)}
-                                  onChange={(e) => onStatusChange(o, e.target.value)}
-                                  className='w-full cursor-pointer rounded px-2 py-1 text-xs font-medium text-white'
-                                  style={{ background: statusColor(o.status) }}
-                                >
-                                  {!BASE_STATUSES.includes(str(o.status)) && (
-                                    <option value={str(o.status)}>
-                                      {str(o.status) || 'No status'}
-                                    </option>
-                                  )}
-                                  {BASE_STATUSES.map((s) => (
-                                    <option
-                                      key={s}
-                                      value={s}
-                                      style={{ background: '#111', color: '#fff' }}
-                                    >
-                                      {s}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                            ) : (
-                              <td
-                                key={c.header}
-                                className={`border-border border-r px-3 py-1.5 last:border-r-0 ${c.className ?? ''}`}
-                              >
-                                {c.cell(o)}
-                              </td>
-                            )
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {rows.length > visible.length && (
-                    <div className='p-2 text-center'>
-                      <Button
-                        variant='ghost'
-                        size='sm'
-                        onClick={() => setShowAll((s) => toggle(s, name))}
-                      >
-                        Show all {rows.length.toLocaleString()} orders (
-                        {(rows.length - visible.length).toLocaleString()} more)
-                      </Button>
-                    </div>
+                  <CollapsibleTrigger className='hover:bg-muted/60 focus-visible:ring-ring/50 flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left outline-none focus-visible:ring-3'>
+                    <Icons.chevronRight
+                      aria-hidden
+                      className={cn(
+                        'text-muted-foreground size-4 shrink-0 transition-transform motion-reduce:transition-none',
+                        !isCollapsed && 'rotate-90'
+                      )}
+                    />
+                    <span className='truncate font-semibold' style={{ color }}>
+                      {name}
+                    </span>
+                    <Badge variant='secondary' className='tabular-nums'>
+                      {rows.length.toLocaleString('en-ZA')}
+                    </Badge>
+                  </CollapsibleTrigger>
+                  {!CLOSED.includes(name) && (
+                    <Button variant='ghost' size='sm' onClick={() => startAdding(name)}>
+                      <Icons.add /> Add Order
+                    </Button>
                   )}
                 </div>
-              )}
-            </section>
+                <CollapsibleContent>
+                  {adding === name && (
+                    <AddOrderRow
+                      board={board}
+                      groupName={name}
+                      onAdd={addOrder}
+                      onCancel={() => setAdding(null)}
+                    />
+                  )}
+                  {rows.length === 0 && adding !== name && (
+                    <p className='text-muted-foreground border-t px-5 py-4 text-sm'>
+                      No orders in this group yet.
+                    </p>
+                  )}
+                  {rows.length > 0 && (
+                    <div className='border-t'>
+                      <Table className='min-w-[960px]'>
+                        <TableHeader className='bg-muted/40'>
+                          <TableRow className='hover:bg-transparent'>
+                            {columns.map((c) => (
+                              <TableHead
+                                key={c.key}
+                                className='text-muted-foreground h-9 text-xs font-medium'
+                              >
+                                {c.header}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {visible.map((o) => (
+                            <TableRow
+                              key={o.id}
+                              data-state={o.id === openId ? 'selected' : undefined}
+                              className='focus-visible:bg-muted/60 cursor-pointer outline-none [contain-intrinsic-size:auto_49px] [content-visibility:auto]'
+                              tabIndex={0}
+                              aria-label={`Open ${siteName(board, o) || str(o.customer)}`}
+                              onClick={() => void setUrl({ order: o.id })}
+                              onKeyDown={(e) => {
+                                if (
+                                  (e.key === 'Enter' || e.key === ' ') &&
+                                  e.target === e.currentTarget
+                                ) {
+                                  e.preventDefault();
+                                  void setUrl({ order: o.id });
+                                }
+                              }}
+                            >
+                              {columns.map((c) => (
+                                <TableCell key={c.key} className={cn('py-2', c.className)}>
+                                  {c.cell(o)}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      {rows.length > visible.length && (
+                        <div className='border-t p-2 text-center'>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            onClick={() => setShowAll((s) => toggleIn(s, name))}
+                          >
+                            Show All {rows.length.toLocaleString('en-ZA')} Orders (
+                            {(rows.length - visible.length).toLocaleString('en-ZA')} more)
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
           );
         })}
-      </main>
+      </div>
 
       {open && (
-        <OrderPanel
+        <OrderSheet
           key={open.id}
           board={board}
           order={open}
-          statuses={[...statuses.base, ...statuses.extra]}
+          statuses={[...BASE_STATUSES, ...extraStatuses]}
           groupNames={[
-            ...new Set([...board.groups, ...BOTTOM, ...orders.map((o) => str(o.groupName))])
+            ...new Set([...board.groups, ...CLOSED, ...orders.map((o) => str(o.groupName))])
           ].filter(Boolean)}
           today={today}
-          onClose={() => setOpenId(null)}
-          patch={patch}
+          onClose={() => void setUrl({ order: null })}
+          save={save}
           followUp={followUp}
-          onDeleted={(id) => {
-            setOrders((p) => p.filter((o) => o.id !== id));
-            setOpenId(null);
-          }}
+          remove={remove}
         />
       )}
-    </div>
+    </TrackerShell>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  icon,
+  tone,
+  hint,
+  active,
+  onClick
+}: {
+  label: string;
+  value: number;
+  icon: ReactNode;
+  tone?: 'danger' | 'warning';
+  hint?: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  const body = (
+    <CardHeader className='gap-1'>
+      <CardDescription className='flex items-center gap-1.5 [&_svg]:size-4'>
+        {icon}
+        {label}
+      </CardDescription>
+      <CardTitle
+        className={cn(
+          'text-3xl font-semibold tabular-nums',
+          tone === 'danger' && 'text-destructive',
+          tone === 'warning' && 'text-amber-600 dark:text-amber-400'
+        )}
+      >
+        {value.toLocaleString('en-ZA')}
+      </CardTitle>
+      {hint && <p className='text-muted-foreground text-xs text-pretty'>{hint}</p>}
+    </CardHeader>
+  );
+  if (!onClick) return <Card className='gap-0 py-4'>{body}</Card>;
+  return (
+    <Card className={cn('gap-0 p-0', active && 'ring-primary ring-2')}>
+      <button
+        type='button'
+        onClick={onClick}
+        aria-pressed={active}
+        className='hover:bg-muted/50 focus-visible:ring-ring/50 rounded-xl py-4 text-left transition-colors outline-none focus-visible:ring-3'
+      >
+        {body}
+      </button>
+    </Card>
   );
 }
 
@@ -708,407 +788,82 @@ function AddOrderRow({
 }: {
   board: BoardDef;
   groupName: string;
-  onAdd: (g: string, c: string, s: string, code: string) => void;
+  onAdd: (g: string, c: string, s: string, code: string) => Promise<void>;
   onCancel: () => void;
 }) {
   const [customer, setCustomer] = useState(board.mrp ? 'Mr Price Group' : '');
   const [site, setSite] = useState('');
   const [storeCode, setStoreCode] = useState('');
-  const ready = customer.trim() !== '' && (!board.mrp || storeCode.trim() !== '');
+  const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const missingCode = board.mrp && !storeCode.trim();
+  const missingCustomer = !customer.trim();
   return (
     <form
-      className='bg-muted/20 flex flex-wrap items-center gap-2 px-3 py-2'
-      onSubmit={(e) => {
+      className='bg-muted/30 flex flex-wrap items-start gap-2 border-t px-4 py-3'
+      onSubmit={async (e) => {
         e.preventDefault();
-        if (ready) onAdd(groupName, customer.trim(), site.trim(), storeCode.trim());
+        setTried(true);
+        if (missingCustomer || missingCode) return;
+        setBusy(true);
+        await onAdd(groupName, customer.trim(), site.trim(), storeCode.trim());
+        setBusy(false);
       }}
     >
       <Input
-        autoFocus={!board.mrp}
         aria-label='Customer'
-        placeholder='Customer'
+        name='customer'
+        autoComplete='off'
+        placeholder='Customer, e.g. Clicks…'
         value={customer}
+        aria-invalid={(tried && missingCustomer) || undefined}
         onChange={(e) => setCustomer(e.target.value)}
-        className='w-56'
+        className='w-full sm:w-56'
       />
       {board.mrp && (
         <Input
-          autoFocus
           aria-label='Store code'
-          placeholder='Store code (required)'
+          name='storeCode'
+          autoComplete='off'
+          spellCheck={false}
+          placeholder='Store code, e.g. 11099…'
+          aria-invalid={(tried && missingCode) || undefined}
           value={storeCode}
           onChange={(e) => setStoreCode(e.target.value)}
-          className='w-40'
+          className='w-full font-mono sm:w-44'
         />
       )}
       <Input
         aria-label={board.mrp ? 'Store name' : 'Site name'}
-        placeholder={board.mrp ? 'Store name, e.g. Mr Price Kids Mall of Africa' : 'Site name'}
+        name='site'
+        autoComplete='off'
+        placeholder={
+          board.mrp
+            ? 'Store name, e.g. Mr Price Kids Mall of Africa…'
+            : 'Site name, e.g. Rosebank Mall…'
+        }
         value={site}
         onChange={(e) => setSite(e.target.value)}
-        className='w-72'
+        className='w-full sm:w-80'
       />
-      <Button type='submit' size='sm' disabled={!ready}>
-        Add
+      <Button type='submit' disabled={busy}>
+        {busy && <Icons.spinner className='animate-spin' />}Add Order
       </Button>
-      <Button type='button' variant='ghost' size='sm' onClick={onCancel}>
+      <Button type='button' variant='ghost' onClick={onCancel}>
         Cancel
       </Button>
-      {board.mrp && (
-        <span className='text-muted-foreground text-xs'>
+      {tried && (missingCustomer || missingCode) && (
+        <p role='alert' className='text-destructive w-full text-xs'>
+          {missingCode
+            ? 'Enter the store code: Mr Price orders need one.'
+            : 'Enter the customer name.'}
+        </p>
+      )}
+      {board.mrp && !tried && (
+        <p className='text-muted-foreground w-full text-xs'>
           The store code is added to the store name automatically.
-        </span>
+        </p>
       )}
     </form>
-  );
-}
-
-function OrderPanel({
-  board,
-  order,
-  statuses,
-  groupNames,
-  today,
-  onClose,
-  patch,
-  followUp,
-  onDeleted
-}: {
-  board: BoardDef;
-  order: Order;
-  statuses: string[];
-  groupNames: string[];
-  today: string;
-  onClose: () => void;
-  patch: (id: string, body: Record<string, unknown>) => Promise<PatchResult>;
-  followUp: (id: string, note?: string) => Promise<PatchResult>;
-  onDeleted: (id: string) => void;
-}) {
-  const [note, setNote] = useState('');
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<'details' | 'activity'>('details');
-  const [log, setLog] = useState<LogEntry[] | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  const loadLog = useCallback(async () => {
-    const res = await fetch(`/api/tracker/orders/${encodeURIComponent(order.id)}`);
-    if (res.ok) setLog(((await res.json()).log ?? []) as LogEntry[]);
-  }, [order.id]);
-  useEffect(() => {
-    if (tab === 'activity' && log === null) void loadLog();
-  }, [tab, log, loadLog]);
-
-  const value = (f: OrderField) =>
-    f in draft ? draft[f] : DATE_FIELDS.has(f) ? fmtDate(order[f]) : str(order[f]);
-  const dirty = Object.keys(draft).length > 0;
-
-  async function save() {
-    setSaving(true);
-    setError(null);
-    const body: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(draft)) body[k] = v;
-    const r = await patch(order.id, body);
-    setSaving(false);
-    if (!r.ok) {
-      setError(r.error);
-      return;
-    }
-    setDraft({});
-    setLog(r.log);
-  }
-
-  async function remove() {
-    const res = await fetch(`/api/tracker/orders/${encodeURIComponent(order.id)}`, {
-      method: 'DELETE'
-    });
-    if (res.ok) onDeleted(order.id);
-    else setError('Could not delete this order');
-  }
-
-  const field = (f: OrderField) => {
-    if (!(EDITABLE_FIELDS as readonly string[]).includes(f)) return null;
-    const id = `f-${f}`;
-    const common = 'border-input bg-background w-full rounded-lg border px-2 py-1.5 text-sm';
-    let input;
-    if (f === 'status') {
-      const list = statuses.includes(value(f)) || !value(f) ? statuses : [value(f), ...statuses];
-      input = (
-        <select
-          id={id}
-          className={common}
-          value={value(f)}
-          onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
-        >
-          {list.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      );
-    } else if (f === 'board') {
-      input = (
-        <select
-          id={id}
-          className={common}
-          value={value(f)}
-          onChange={(e) => {
-            const target = getBoard(e.target.value);
-            // Moving to another board puts the order in that board's first group.
-            setDraft((d) => ({
-              ...d,
-              board: e.target.value,
-              groupName:
-                target && target.id !== order.board ? target.groups[0] : str(order.groupName)
-            }));
-          }}
-        >
-          {BOARDS.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.title}
-            </option>
-          ))}
-        </select>
-      );
-    } else if (f === 'groupName') {
-      const targetGroups =
-        draft.board && draft.board !== order.board
-          ? [...(getBoard(draft.board)?.groups ?? []), ...BOTTOM]
-          : groupNames;
-      const list = targetGroups.includes(value(f)) ? targetGroups : [value(f), ...targetGroups];
-      input = (
-        <select
-          id={id}
-          className={common}
-          value={value(f)}
-          onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
-        >
-          {list.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      );
-    } else if (f === 'owner') {
-      input = (
-        <select
-          id={id}
-          className={common}
-          value={value(f)}
-          onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
-        >
-          <option value=''>Unassigned</option>
-          {(OWNERS as readonly string[]).map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      );
-    } else if (f === 'notes' || f === 'address') {
-      input = (
-        <textarea
-          id={id}
-          rows={3}
-          className={common}
-          value={value(f)}
-          onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
-        />
-      );
-    } else {
-      input = (
-        <input
-          id={id}
-          className={common}
-          type={DATE_FIELDS.has(f) ? 'date' : 'text'}
-          inputMode={(MONEY_FIELDS as readonly string[]).includes(f) ? 'decimal' : undefined}
-          value={value(f)}
-          onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
-        />
-      );
-    }
-    return (
-      <div key={f} className={f === 'notes' || f === 'address' ? 'col-span-2' : ''}>
-        <label htmlFor={id} className='text-muted-foreground mb-1 block text-xs'>
-          {LABELS[f] ?? f}
-        </label>
-        {input}
-      </div>
-    );
-  };
-
-  return (
-    <div
-      className='fixed inset-0 z-50 flex justify-end'
-      role='dialog'
-      aria-modal='true'
-      aria-label='Order details'
-    >
-      <button aria-label='Close panel' className='absolute inset-0 bg-black/50' onClick={onClose} />
-      <aside className='bg-card border-border relative flex h-full w-full max-w-xl flex-col border-l shadow-2xl'>
-        <div className='border-border flex items-start justify-between gap-3 border-b p-4'>
-          <div className='min-w-0'>
-            <h2 className='truncate text-lg font-semibold'>
-              {board.mrp
-                ? siteName(board, order) || 'Untitled store'
-                : str(order.customer) || 'Untitled order'}
-            </h2>
-            <p className='text-muted-foreground truncate text-sm'>
-              {board.mrp ? str(order.customer) : str(order.site)}
-            </p>
-            <div className='mt-2'>
-              <StatusPill status={order.status === null ? null : String(order.status)} />
-            </div>
-          </div>
-          <Button variant='ghost' size='sm' onClick={onClose}>
-            Close
-          </Button>
-        </div>
-        <div className='border-border flex gap-4 border-b px-4' role='tablist'>
-          {(['details', 'activity'] as const).map((t) => (
-            <button
-              key={t}
-              role='tab'
-              aria-selected={tab === t}
-              onClick={() => setTab(t)}
-              className={`-mb-px border-b-2 py-2 text-sm capitalize ${tab === t ? 'border-primary font-semibold' : 'text-muted-foreground border-transparent'}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <div className='flex-1 overflow-y-auto p-4'>
-          {error && (
-            <div
-              role='alert'
-              className='mb-3 rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300'
-            >
-              {error}
-            </div>
-          )}
-          {tab === 'details' ? (
-            <div className='flex flex-col gap-6'>
-              {(() => {
-                const f = followUpOf(board, order, today);
-                if (!f) return null;
-                return (
-                  <div className='border-border rounded-lg border p-3'>
-                    <div className='flex items-center justify-between gap-2 text-sm'>
-                      <span>
-                        Next follow-up{' '}
-                        <span
-                          className={`ml-1 rounded px-1.5 py-0.5 tabular-nums ${FOLLOW_UP_STYLE[f.state]}`}
-                        >
-                          {f.due}
-                        </span>
-                      </span>
-                      <span className='text-muted-foreground text-xs'>
-                        Last: {fmtDate(order.lastFollowUp) || 'never'}
-                      </span>
-                    </div>
-                    <form
-                      className='mt-2 flex gap-2'
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        const r = await followUp(order.id, note);
-                        if (!r.ok) {
-                          setError(r.error);
-                          return;
-                        }
-                        setNote('');
-                        setLog(r.log);
-                      }}
-                    >
-                      <input
-                        aria-label='Follow-up note'
-                        placeholder='What happened? (optional)'
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        className='border-input bg-background flex-1 rounded-lg border px-2 py-1.5 text-sm'
-                      />
-                      <Button type='submit' size='sm'>
-                        Followed up today
-                      </Button>
-                    </form>
-                  </div>
-                );
-              })()}
-              {SECTIONS.map((s) => (
-                <fieldset key={s.title}>
-                  <legend className='mb-2 text-sm font-semibold'>{s.title}</legend>
-                  <div className='grid grid-cols-2 gap-3'>{s.fields.map(field)}</div>
-                </fieldset>
-              ))}
-              <div className='border-border border-t pt-4'>
-                {confirmDelete ? (
-                  <div className='flex items-center gap-2 text-sm'>
-                    <span>Delete this order permanently?</span>
-                    <Button variant='destructive' size='sm' onClick={remove}>
-                      Yes, delete
-                    </Button>
-                    <Button variant='ghost' size='sm' onClick={() => setConfirmDelete(false)}>
-                      Keep
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    className='text-red-400'
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    Delete order
-                  </Button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <ol className='flex flex-col gap-3'>
-              {log === null && <li className='text-muted-foreground text-sm'>Loading…</li>}
-              {log?.length === 0 && (
-                <li className='text-muted-foreground text-sm'>No activity yet.</li>
-              )}
-              {log?.map((l) => (
-                <li key={l.n} className='border-border border-l-2 pl-3 text-sm'>
-                  <div className='text-muted-foreground text-xs tabular-nums'>
-                    {l.at.replace('T', ' ').slice(0, 16)}
-                  </div>
-                  <div>{l.text}</div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-        {tab === 'details' && (
-          <div className='border-border flex items-center justify-end gap-2 border-t p-3'>
-            <Button
-              variant='ghost'
-              size='sm'
-              disabled={!dirty || saving}
-              onClick={() => {
-                setDraft({});
-                setError(null);
-              }}
-            >
-              Discard
-            </Button>
-            <Button size='sm' disabled={!dirty || saving} onClick={save}>
-              {saving ? 'Saving…' : 'Save changes'}
-            </Button>
-          </div>
-        )}
-      </aside>
-    </div>
   );
 }

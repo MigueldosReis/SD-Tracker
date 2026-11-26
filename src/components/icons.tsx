@@ -89,7 +89,15 @@ import {
   IconUsers,
   IconVideo,
   IconCrown,
-  IconX
+  IconX,
+  IconBuildingStore,
+  IconBuildingWarehouse,
+  IconRouter,
+  IconRadar2,
+  IconArrowsSplit2,
+  IconHomeCheck,
+  IconPhoneCall,
+  IconFilter
 } from '@tabler/icons-react';
 
 export type Icon = React.ComponentType<IconProps>;
@@ -223,5 +231,14 @@ export const Icons = {
   slash: IconSlash,
   calendar: IconCalendar,
   galleryVerticalEnd: IconStack2,
-  moreHorizontal: IconDots
+  moreHorizontal: IconDots,
+  // SD Tracker boards
+  router: IconRouter,
+  store: IconBuildingStore,
+  warehouse: IconBuildingWarehouse,
+  radar: IconRadar2,
+  split: IconArrowsSplit2,
+  homeCheck: IconHomeCheck,
+  phoneCall: IconPhoneCall,
+  filter: IconFilter
 };
