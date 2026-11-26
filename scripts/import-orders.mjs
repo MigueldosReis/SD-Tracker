@@ -4,7 +4,7 @@
 // fictional data/seed.sample.json is used so the app still runs from a fresh clone.
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
-import { ORDER_FIELDS } from '../src/lib/tracker-fields.ts';
+import { ORDER_FIELDS, boardFor } from '../src/lib/tracker-fields.ts';
 
 const src = process.argv[2] ?? (existsSync('data/seed.json') ? 'data/seed.json' : 'data/seed.sample.json');
 console.log(`importing from ${src}`);
@@ -18,6 +18,7 @@ db.exec(`
   CREATE TABLE orders (id TEXT PRIMARY KEY, ${cols});
   CREATE TABLE order_log (n INTEGER PRIMARY KEY AUTOINCREMENT, orderId TEXT NOT NULL, at TEXT NOT NULL, text TEXT NOT NULL);
   CREATE INDEX idx_orders_group ON orders(groupName);
+  CREATE INDEX idx_orders_board ON orders(board);
   CREATE INDEX idx_orders_status ON orders(status);
   CREATE INDEX idx_log_order ON order_log(orderId);
 `);
@@ -29,6 +30,7 @@ let n = 0, logs = 0;
 db.exec('BEGIN');
 for (const r of rows) {
   const rec = { ...r, groupName: r.group };
+  rec.board = boardFor(rec);
   ins.run(r.id, ...ORDER_FIELDS.map((f) => (rec[f] === undefined ? null : rec[f])));
   for (const l of r.log ?? []) { insLog.run(r.id, l.at, l.text); logs++; }
   n++;
@@ -36,4 +38,5 @@ for (const r of rows) {
 db.exec('COMMIT');
 const count = db.prepare('SELECT COUNT(*) c FROM orders').get().c;
 console.log(`imported ${n} orders, ${logs} log entries; db has ${count} orders`);
+for (const r of db.prepare('SELECT board, COUNT(*) c FROM orders GROUP BY board ORDER BY c DESC').all()) console.log(`  ${r.board}: ${r.c}`);
 if (count !== rows.length) { console.error('COUNT MISMATCH'); process.exit(1); }
