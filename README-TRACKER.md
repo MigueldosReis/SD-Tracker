@@ -15,9 +15,10 @@ Interactive service delivery tracker, started from the MIT-licensed `Kiranism/ne
   - **Feasibility**, **Dual Supplier** (`/boards/feasibility`, `/boards/dual-supplier`).
 - Follow-ups (all boards except Orders): each open order is due a follow-up 3 working days after the last one (or after it was created), skipping weekends and South African public holidays. Overdue dates are red, today's are amber. "Done" in the row, or "Followed up today" with a note in the side panel, records it in the activity log. "Follow-ups due" filters to what needs chasing.
 - Interface: sidebar with every board and its counts (red = follow-ups due), summary cards, light and dark mode, filters kept in the address bar so a view can be bookmarked or shared (e.g. `/boards/mrp-new-stores?due=true`), and a side panel for each order with details, follow-ups and its activity log.
+- My work (`/my-work`): pick yourself once; see what needs action across every board (ready to close with one-click Mark Complete, booked dates passed, late steps, follow-ups due, this week's bookings), updates that @mention you, and who on the team has what.
 - Views: Table, Kanban (open orders by delivery step; drag a card to change status, rules still apply) and Calendar (booked surveys, installs, cutovers and follow-ups for six weeks, plus booked dates that passed without a status change).
 - Late for their step: each of the 16 steps has a usual time in working days (or a booked date); late orders get a red badge, a summary card and a Late filter. Imported orders are only flagged once their status changes here, or when a booked date has passed.
-- Updates: a conversation on every order (Updates tab in the side panel), with a count on the row.
+- Updates: a conversation on every order (Updates tab in the side panel), with a count on the row. Type @ and a first name to mention someone.
 - Bulk changes: tick rows to set status, owner or group for all of them, or delete them.
 - Every board: solid status colours, search and status filter, inline status change, side panel with all fields and an activity log, add, delete and move orders between boards.
 - Rules: a status such as "Install Scheduled" needs its date filled in first.

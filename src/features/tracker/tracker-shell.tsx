@@ -28,14 +28,15 @@ import { BOARD_ICONS, boardHref, type Summary } from './shared';
 const itemClass =
   'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground [&>svg]:text-sidebar-foreground/60 data-active:[&>svg:first-child]:text-sidebar-primary';
 
-/** App frame for every tracker board: board navigation on the left, page header on top. */
+/** App frame for every tracker page: board navigation on the left, page header on top. */
 export function TrackerShell({
   board,
   summaries,
   actions,
   children
 }: {
-  board: BoardDef;
+  /** The page shown: a board, or another page such as My work. */
+  board: Pick<BoardDef, 'title'> & { id: string };
   summaries: Summary[];
   actions?: ReactNode;
   children: ReactNode;
@@ -149,6 +150,28 @@ function BoardsSidebar({ active, summaries }: { active: string; summaries: Summa
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className='overflow-x-hidden'>
+        <SidebarGroup className='group-data-[collapsible=icon]:px-1'>
+          <SidebarMenu className='gap-0.5'>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                render={
+                  <Link
+                    href='/my-work'
+                    aria-label='My work'
+                    aria-current={active === 'my-work' ? 'page' : undefined}
+                  />
+                }
+                tooltip='My work: what needs your attention today'
+                isActive={active === 'my-work'}
+                className={itemClass}
+                onClick={() => setOpenMobile(false)}
+              >
+                <Icons.checks />
+                <span>My work</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
         {section('Delivery', main)}
         {section('Mr Price', mrp)}
         {section('Follow-up boards', chase)}

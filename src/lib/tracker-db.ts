@@ -391,3 +391,35 @@ export function bulkDelete(ids: string[]): BulkResult[] {
     deleteOrder(id) ? { id, ok: true } : { id, ok: false, error: 'Order not found' }
   );
 }
+
+/** Open orders on every board (for My work). */
+export function listOpenOrders(): Order[] {
+  const closed = CLOSED_GROUPS.map(() => '?').join(', ');
+  const rows = db()
+    .prepare(
+      `SELECT ${SELECT_COLS} FROM orders o WHERE COALESCE(o.status, '') NOT IN ('Complete', 'Cancelled')
+       AND COALESCE(o.groupName, '') NOT IN (${closed}) ORDER BY o.updatedAt DESC`
+    )
+    .all(...CLOSED_GROUPS) as unknown as Order[];
+  return rows.map(plain);
+}
+
+export type RecentUpdate = UpdateEntry & {
+  board: string | null;
+  customer: string | null;
+  site: string | null;
+  storeCode: string | null;
+  ref: string | null;
+};
+
+/** Updates posted in the last `days` days on any order, newest first (for mentions on My work). */
+export function recentUpdates(days = 30, limit = 300): RecentUpdate[] {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const rows = db()
+    .prepare(
+      `SELECT u.n, u.orderId, u.at, u.author, u.text, o.board, o.customer, o.site, o.storeCode, o.ref
+       FROM order_updates u JOIN orders o ON o.id = u.orderId WHERE u.at >= ? ORDER BY u.n DESC LIMIT ?`
+    )
+    .all(since, limit) as unknown as RecentUpdate[];
+  return rows.map(plain);
+}

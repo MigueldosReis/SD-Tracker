@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { OWNERS } from '@/lib/tracker-fields';
+import { mentions } from '@/lib/attention';
 import { fmtDateTime } from './shared';
 
 type Update = { n: number; at: string; author: string | null; text: string };
@@ -24,6 +25,32 @@ function readAuthor(): string {
   } catch {
     return '';
   }
+}
+
+/** Update text with @mentions of team members highlighted. */
+export function MentionText({ text }: { text: string }) {
+  const names = mentions(text);
+  if (names.length === 0) return <>{text}</>;
+  const firsts = names.map((n) => n.split(' ')[0]).join('|');
+  const parts = text.split(
+    new RegExp(
+      `(@(?:${firsts})(?:\\s+(?:${names.map((n) => n.split(' ').slice(1).join(' ')).join('|')}))?)`,
+      'i'
+    )
+  );
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className='bg-primary/10 text-foreground rounded px-0.5 font-medium'>
+            {p}
+          </mark>
+        ) : (
+          p
+        )
+      )}
+    </>
+  );
 }
 
 const initials = (name: string) =>
@@ -102,7 +129,7 @@ export function UpdatesPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           aria-label='Write an update'
-          placeholder='Write an update, e.g. Supplier confirmed the survey for Tuesday…'
+          placeholder='Write an update. Type @ and a name to mention someone, e.g. @Jordan supplier confirmed Tuesday…'
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) post(e);
           }}
@@ -164,7 +191,9 @@ export function UpdatesPanel({
                   {fmtDateTime(u.at)}
                 </time>
               </div>
-              <p className='text-sm break-words whitespace-pre-wrap'>{u.text}</p>
+              <p className='text-sm break-words whitespace-pre-wrap'>
+                <MentionText text={u.text} />
+              </p>
             </li>
           ))}
         </ol>

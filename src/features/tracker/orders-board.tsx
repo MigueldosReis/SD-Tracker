@@ -550,6 +550,7 @@ export function OrdersBoard({
         {board.view ? (
           <Button
             variant='outline'
+            nativeButton={false}
             render={
               <Link
                 href={boardHref(board.view.source)}

@@ -4,15 +4,17 @@
 
 Service delivery tracker for Firstnet connectivity orders, built to replace the monday.com boards. Read `README-TRACKER.md` first.
 
-- **Tracker routes live in `src/app/(tracker)/`** (own root layout, no Clerk): `/orders` and `/boards/[board]`, API under `/api/tracker`. The starter pages live in `src/app/(starter)/` and still need Clerk keys. `src/proxy.ts` excludes `/orders`, `/boards` and `/api/tracker` from Clerk.
+- **Tracker routes live in `src/app/(tracker)/`** (own root layout, no Clerk): `/orders`, `/boards/[board]` and `/my-work`, API under `/api/tracker`. The starter pages live in `src/app/(starter)/` and still need Clerk keys. `src/proxy.ts` excludes `/orders`, `/boards`, `/my-work` and `/api/tracker` from Clerk.
 - **Data**: SQLite via the built-in `node:sqlite` (Node 22.5+). Database file `data/tracker.db`, rebuilt from `data/seed.json` (real customer data, git-ignored; falls back to the fictional `data/seed.sample.json`) with `node scripts/import-orders.mjs`. `tracker-db.ts` adds any missing columns to an older database on first use. All database access goes through `src/lib/tracker-db.ts` (server only). `node:sqlite` returns null-prototype rows: always convert to plain objects before passing to Client Components.
 - **Fields and rules** (statuses, editable fields, status prerequisites, boards and their groups, which board an order belongs on) are in `src/lib/tracker-fields.ts`. Change them there, not in the UI. Each order has a `board` column. Landlord Approval is a view board (`view` in `BoardDef`): MRP Project Orders in a `LANDLORD_STATUSES` status; use `belongsTo()` for board membership, `STORED_BOARDS` for where orders can live.
 - **Delivery journey**: `src/lib/journey.ts` holds the usual working days per step and `stepState()` (late or not); `statusSince` comes from the activity log in `tracker-db.ts`. Updates (comments) live in the `order_updates` table.
+- **My work / reminders**: `src/lib/attention.ts` (what needs action per order, @mentions; tested). Page at `src/app/(tracker)/my-work`.
 - **Follow-ups**: `src/lib/working-days.ts` (3 working days, skipping weekends and ZA public holidays; tested with `bun test`). Boards with `followUp: true` show the next follow-up date.
 - **UI** is in `src/features/tracker/`, built from the project's shadcn/ui (Base UI) components: `tracker-shell.tsx` (sidebar + header), `orders-board.tsx` (summary cards, toolbar, grouped tables), `order-sheet.tsx` (detail panel), `status-controls.tsx`, helpers in `shared.ts`. Filters and the open order are kept in the URL with nuqs (`?q=&status=&due=&order=`). Status colours come from `status-style.ts` (solid, one distinct colour per status). Base UI menus stay open after a radio pick unless the item has `closeOnClick`.
 - **Product rules**: 16-step delivery process; legacy statuses stay as they are; MRP (Mr Price) orders are NOT shown on the Orders page (they live on the MRP boards); every MRP site name carries its store code (enforced in `tracker-db.ts`).
 - **Roadmap**: `docs/roadmap.md`.
-- **Still to build**: Gantt view, notifications, automations, later layers of the source data (`update-*.json`), Postgres/Supabase, replacing Clerk.
+- **Artifact**: the live team tool is the claude.ai artifact "Connectivity Order Tracking"; keep its features in step with the app.
+- **Still to build**: Gantt view, notifications, later layers of the source data (`update-*.json`), Postgres/Supabase, replacing Clerk.
 - Run: `bun install`, `node scripts/import-orders.mjs`, `bun dev`, open `/orders`. If `bun dev` stops on an upgrade notice, run it again.
 
 ---

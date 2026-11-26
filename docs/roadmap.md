@@ -41,13 +41,16 @@ TrustRadius reviews, ClickUp's monday.com review, monday.com support docs.
 - Late-for-step flags with the 16-step journey bar on each order.
 - Bulk status / owner / group / delete, with the same rules as single edits.
 - Follow-ups every 3 working days on follow-up boards.
+- **My work** (`/my-work`): per person, everything needing action across all boards, worked out from the
+  rules with nothing to set up: ready to close (handover confirmation period passed, one-click Mark Complete),
+  booked date passed, late for their step, follow-ups due, and this week's bookings. Plus @mentions in
+  updates and a team view of who has what (including unassigned orders).
 
 ## Next
 
-1. **Notifications and a "My work" page**: orders I own that are late, follow-ups due today, updates on my orders.
-2. **Simple automations without the setup**: e.g. when an order reaches Handover Sent, remind the owner to
-   mark it Complete after 2 working days; when Install Scheduled is set, add the install to the calendar feed.
-3. **Mentions in updates** (`@Jordan`) and file attachments (COFs, landlord documents, handover packs).
+1. **Notifications**: a daily email or Teams/Slack digest of each person's My work (needs sign-in and a mail or chat connection).
+2. **More built-in reminders**: e.g. COF requested but not received after 3 working days; landlord documents sent to the client but not signed after 5.
+3. **File attachments** on orders (COFs, landlord documents, handover packs).
 4. **Overview dashboard across boards**: open orders by step and supplier, late orders by who to chase,
    average days per step (from the activity log).
 5. **Chase list**: late orders grouped by supplier with a copy-ready email, as in the current artifact.
