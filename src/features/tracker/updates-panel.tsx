@@ -12,8 +12,8 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { OWNERS } from '@/lib/tracker-fields';
 import { mentions } from '@/lib/attention';
+import { useTeam } from './team-context';
 import { fmtDateTime } from './shared';
 
 type Update = { n: number; at: string; author: string | null; text: string };
@@ -29,7 +29,8 @@ function readAuthor(): string {
 
 /** Update text with @mentions of team members highlighted. */
 export function MentionText({ text }: { text: string }) {
-  const names = mentions(text);
+  const team = useTeam();
+  const names = mentions(text, team);
   if (names.length === 0) return <>{text}</>;
   const firsts = names.map((n) => n.split(' ')[0]).join('|');
   const parts = text.split(
@@ -69,6 +70,7 @@ export function UpdatesPanel({
   orderId: string;
   onCount: (n: number) => void;
 }) {
+  const team = useTeam();
   const [updates, setUpdates] = useState<Update[] | null>(null);
   const [text, setText] = useState('');
   // Who is posting: remembered on this device; empty until the browser is available (no hydration mismatch).
@@ -129,7 +131,7 @@ export function UpdatesPanel({
           value={text}
           onChange={(e) => setText(e.target.value)}
           aria-label='Write an update'
-          placeholder='Write an update. Type @ and a name to mention someone, e.g. @Jordan supplier confirmed Tuesday…'
+          placeholder={`Write an update. Type @ and a name to mention someone, e.g. @${(team[0] ?? 'Alex').split(' ')[0]} supplier confirmed Tuesday…`}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) post(e);
           }}
@@ -151,7 +153,7 @@ export function UpdatesPanel({
               <SelectValue placeholder='Posting as…' />
             </SelectTrigger>
             <SelectContent>
-              {OWNERS.map((o) => (
+              {team.map((o) => (
                 <SelectItem key={o} value={o}>
                   {o}
                 </SelectItem>

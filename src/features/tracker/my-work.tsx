@@ -23,7 +23,8 @@ import {
   type AttentionItem,
   type AttentionKind
 } from '@/lib/attention';
-import { OWNERS, getBoard, type Order } from '@/lib/tracker-fields';
+import { getBoard, type Order } from '@/lib/tracker-fields';
+import { useTeam } from './team-context';
 import { todayZA } from '@/lib/working-days';
 import { cn } from '@/lib/utils';
 import { boardHref, fmtDate, fmtDateTime, orderTitle, str, type Summary } from './shared';
@@ -89,6 +90,7 @@ export function MyWork({
   updates: RecentUpdate[];
   summaries: Summary[];
 }) {
+  const team = useTeam();
   const [orders, setOrders] = useState(initialOrders);
   const stored = useSyncExternalStore(
     () => () => {},
@@ -112,16 +114,13 @@ export function MyWork({
     return KIND_ORDER.filter((k) => m.has(k)).map((k) => ({ kind: k, items: m.get(k)! }));
   }, [items]);
   const myMentions = useMemo(
-    () =>
-      (OWNERS as readonly string[]).includes(who)
-        ? updates.filter((u) => mentions(u.text).includes(who))
-        : [],
+    () => (team.includes(who) ? updates.filter((u) => mentions(u.text, team).includes(who)) : []),
     [updates, who]
   );
   const unassigned = useMemo(() => orders.filter((o) => !o.owner).length, [orders]);
   const perOwner = useMemo(() => {
     const all = attentionList(orders, today);
-    return [...OWNERS, null].map((p) => ({
+    return [...team, null].map((p) => ({
       name: p,
       n: all.filter((i) => (byId.get(i.orderId)?.owner ?? null) === p && i.kind !== 'this-week')
         .length
@@ -130,7 +129,7 @@ export function MyWork({
 
   function choose(v: string) {
     setPicked(v);
-    if ((OWNERS as readonly string[]).includes(v)) {
+    if (team.includes(v)) {
       try {
         localStorage.setItem(ME_KEY, v);
       } catch {
@@ -192,7 +191,7 @@ export function MyWork({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {OWNERS.map((o) => (
+            {team.map((o) => (
               <SelectItem key={o} value={o}>
                 {o}
               </SelectItem>
@@ -323,7 +322,7 @@ export function MyWork({
         </div>
 
         <aside className='flex flex-col gap-6'>
-          {(OWNERS as readonly string[]).includes(who) && (
+          {team.includes(who) && (
             <section aria-labelledby='mentions-h'>
               <h2 id='mentions-h' className='mb-2 font-semibold'>
                 Mentions

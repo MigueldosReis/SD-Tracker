@@ -6,6 +6,8 @@ import ThemeProvider from '@/components/themes/theme-provider';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { readTeam } from '@/lib/team';
+import { TeamProvider } from '@/features/tracker/team-context';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
@@ -39,7 +41,7 @@ export default function TrackerLayout({ children }: { children: React.ReactNode 
             enableColorScheme
           >
             <TooltipProvider>
-              {children}
+              <TeamProvider people={readTeam()}>{children}</TeamProvider>
               <Toaster richColors closeButton position='bottom-right' />
             </TooltipProvider>
           </ThemeProvider>

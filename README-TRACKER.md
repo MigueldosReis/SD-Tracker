@@ -29,6 +29,8 @@ Interactive service delivery tracker, started from the MIT-licensed `Kiranism/ne
 One-off public holidays (e.g. election days) are not predictable: add them to `EXTRA_HOLIDAYS` in `src/lib/working-days.ts` when they are declared.
 
 ## Data
+`data/team.json` lists the service delivery team (owners, update authors, @mentions). It is git-ignored to keep staff names out of the public repository; copy it in by hand like `seed.json`. Without it the fictional `data/team.sample.json` is used.
+
 `data/seed.json` is the baseline export (2,232 orders). It contains real customer data, so it is git-ignored and must be copied in by hand. Without it, the importer falls back to `data/seed.sample.json` (12 fictional orders). Imported Mr Price Group orders whose reference says "new store" go to MRP New Stores, the rest to MRP Project Orders. Older `tracker.db` files are upgraded automatically on first use. Later updates from the original tracker (`update-2026-11-26.json` and others) have NOT been applied yet.
 
 ## Roadmap

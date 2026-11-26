@@ -6,6 +6,8 @@
 # real customer order data: keep out of git (public repo)
 /data/seed.json
 /data/update-*.json
+# staff names: keep out of git (public repo)
+/data/team.json
 /.pnp
 .pnp.js
 package-lock.json

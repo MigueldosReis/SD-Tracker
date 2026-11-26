@@ -2,6 +2,16 @@ import { describe, expect, test } from 'bun:test';
 import { attentionFor, attentionList, mentions } from './attention';
 import type { Order } from './tracker-fields';
 
+// Fictional team for tests (real names are kept out of the repository).
+const TEAM = [
+  'Alex Mokoena',
+  'Priya Naidoo',
+  'Sam van Wyk',
+  'Thandi Dlamini',
+  'Jordan Petersen',
+  'Lee Botha'
+];
+
 const today = '2026-11-26'; // Thursday
 const order = (o: Partial<Order>): Order =>
   ({
@@ -74,7 +84,12 @@ describe('attentionList', () => {
       status: 'Install Scheduled',
       installDate: '2026-11-24'
     }),
-    order({ id: 'b', owner: 'Jordan Petersen', status: 'Handover Sent', statusSince: '2026-11-20' }),
+    order({
+      id: 'b',
+      owner: 'Jordan Petersen',
+      status: 'Handover Sent',
+      statusSince: '2026-11-20'
+    }),
     order({ id: 'c', status: 'Install Scheduled', installDate: '2026-11-25' })
   ];
   test('per owner, most urgent kind first', () => {
@@ -87,12 +102,12 @@ describe('attentionList', () => {
 
 describe('mentions', () => {
   test('first name or full name, any case', () => {
-    expect(mentions('Thanks @jordan, can you check?')).toEqual(['Jordan Petersen']);
-    expect(mentions('@Sam van Wyk please chase')).toEqual(['Sam van Wyk']);
-    expect(mentions('@Alex and @Thandi')).toEqual(['Alex Mokoena', 'Thandi Dlamini']);
+    expect(mentions('Thanks @jordan, can you check?', TEAM)).toEqual(['Jordan Petersen']);
+    expect(mentions('@Sam van Wyk please chase', TEAM)).toEqual(['Sam van Wyk']);
+    expect(mentions('@Alex and @Thandi', TEAM)).toEqual(['Alex Mokoena', 'Thandi Dlamini']);
   });
   test('not an email address or another word', () => {
-    expect(mentions('mail alex@example.com')).toEqual([]);
-    expect(mentions('@Alexander')).toEqual([]);
+    expect(mentions('mail alex@example.com', TEAM)).toEqual([]);
+    expect(mentions('@Alexander', TEAM)).toEqual([]);
   });
 });

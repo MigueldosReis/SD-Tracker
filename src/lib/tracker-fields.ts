@@ -257,12 +257,3 @@ export function displaySite(o: { site?: unknown; ref?: unknown }): string {
     .replace(/\s*\(copy\)$/i, '')
     .trim();
 }
-
-export const OWNERS = [
-  'Alex Mokoena',
-  'Priya Naidoo',
-  'Sam van Wyk',
-  'Thandi Dlamini',
-  'Jordan Petersen',
-  'Lee Botha'
-] as const;

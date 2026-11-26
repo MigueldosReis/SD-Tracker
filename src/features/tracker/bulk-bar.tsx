@@ -23,7 +23,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { OTHER_STATUSES, OWNERS, PROCESS_STATUSES } from '@/lib/tracker-fields';
+import { OTHER_STATUSES, PROCESS_STATUSES } from '@/lib/tracker-fields';
+import { useTeam } from './team-context';
 
 const NONE = '__none__';
 
@@ -43,6 +44,7 @@ export function BulkBar({
   onDelete: () => void;
   onClear: () => void;
 }) {
+  const team = useTeam();
   const [key, setKey] = useState(0); // reset the pickers after each action
   const pick = (
     placeholder: string,
@@ -108,7 +110,7 @@ export function BulkBar({
           ),
         <>
           <SelectItem value={NONE}>Unassigned</SelectItem>
-          {OWNERS.map((o) => (
+          {team.map((o) => (
             <SelectItem key={o} value={o}>
               {o}
             </SelectItem>

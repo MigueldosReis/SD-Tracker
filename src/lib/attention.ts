@@ -1,7 +1,7 @@
 // What needs someone's attention today: the reminders a monday.com user would have to build as automations.
 // Pure functions, shared by the My work page and its tests.
 import { STEP_RULES, stepState } from './journey';
-import { CLOSED_GROUPS, OWNERS, getBoard, type Order } from './tracker-fields';
+import { CLOSED_GROUPS, getBoard, type Order } from './tracker-fields';
 import { addWorkingDays, followUpState, nextFollowUp } from './working-days';
 
 export type AttentionKind = 'close' | 'date-passed' | 'late' | 'follow-up' | 'this-week';
@@ -134,8 +134,8 @@ export function attentionList(
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** People mentioned in an update, e.g. "@Jordan" or "@Jordan Petersen" (first names are unique on the team). */
-export function mentions(text: string, people: readonly string[] = OWNERS): string[] {
+/** Team members mentioned in an update, e.g. "@Alex" or "@Alex Mokoena" (first names are unique on the team). */
+export function mentions(text: string, people: readonly string[]): string[] {
   return people.filter((p) => {
     const [first, ...rest] = p.split(' ');
     const re = new RegExp(

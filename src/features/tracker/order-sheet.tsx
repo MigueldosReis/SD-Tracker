@@ -39,7 +39,6 @@ import {
   STORED_BOARDS,
   EDITABLE_FIELDS,
   MONEY_FIELDS,
-  OWNERS,
   getBoard,
   type BoardDef,
   type Order,
@@ -63,6 +62,7 @@ import {
 } from './shared';
 import { FollowUpBadge, StatusBadge } from './status-controls';
 import { UpdatesPanel } from './updates-panel';
+import { useTeam } from './team-context';
 import type { StepState } from '@/lib/journey';
 
 /** Where the order is on the 16-step journey, and whether it is late for its step. */
@@ -135,6 +135,7 @@ export function OrderSheet({
   step: StepState | null;
   onUpdatesChanged: (count: number) => void;
 }) {
+  const team = useTeam();
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [error, setError] = useState<{ message: string; field?: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -258,7 +259,7 @@ export function OrderSheet({
     } else if (f === 'owner') {
       input = select(id, f, value(f), [
         { value: NONE, label: 'Unassigned' },
-        ...OWNERS.map((o) => ({ value: o, label: o }))
+        ...team.map((o) => ({ value: o, label: o }))
       ]);
     } else if (WIDE_FIELDS.has(f)) {
       input = (
