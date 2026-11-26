@@ -1,10 +1,13 @@
 // Usage: node scripts/import-orders.mjs [path/to/seed.json]
 // Rebuilds data/tracker.db from the exported tracker data. Safe to re-run: it replaces the database.
+// data/seed.json holds real customer data and is NOT committed (see .gitignore). Without it, the
+// fictional data/seed.sample.json is used so the app still runs from a fresh clone.
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync, rmSync, mkdirSync } from 'node:fs';
+import { readFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { ORDER_FIELDS } from '../src/lib/tracker-fields.ts';
 
-const src = process.argv[2] ?? 'data/seed.json';
+const src = process.argv[2] ?? (existsSync('data/seed.json') ? 'data/seed.json' : 'data/seed.sample.json');
+console.log(`importing from ${src}`);
 const rows = JSON.parse(readFileSync(src, 'utf8'));
 mkdirSync('data', { recursive: true });
 rmSync('data/tracker.db', { force: true });

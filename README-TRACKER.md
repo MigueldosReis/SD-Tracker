@@ -13,4 +13,4 @@ Interactive service delivery tracker, started from the MIT-licensed `Kiranism/ne
 - Mr Price store orders are kept off this page.
 
 ## Data
-`data/seed.json` is the baseline export (2,232 orders). Later updates from the original tracker (`update-2026-11-26.json` and others) have NOT been applied yet.
+`data/seed.json` is the baseline export (2,232 orders). It contains real customer data, so it is git-ignored and must be copied in by hand. Without it, the importer falls back to `data/seed.sample.json` (12 fictional orders). Later updates from the original tracker (`update-2026-11-26.json` and others) have NOT been applied yet.

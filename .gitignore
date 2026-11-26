@@ -3,6 +3,9 @@
 # dependencies
 /node_modules
 /data/tracker.db
+# real customer order data: keep out of git (public repo)
+/data/seed.json
+/data/update-*.json
 /.pnp
 .pnp.js
 package-lock.json

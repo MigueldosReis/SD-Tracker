@@ -1,0 +1,334 @@
+[
+ {
+  "ref": "DEMO-1000",
+  "customer": "Example Retail Co",
+  "site": "Northgate 100",
+  "circuit": "CN-DEMO-0000",
+  "status": "Awaiting Internal Approval",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Example Retail Co Northgate, 1 Example Street, Sampletown",
+  "id": "demo000",
+  "group": "New Pending Orders",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ]
+ },
+ {
+  "ref": "DEMO-1001",
+  "customer": "Sample Pharmacy Group",
+  "site": "Riverside 101",
+  "circuit": "CN-DEMO-0001",
+  "status": "Order to be Placed",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Sample Pharmacy Group Riverside, 1 Example Street, Sampletown",
+  "id": "demo001",
+  "group": "New Pending Orders",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ]
+ },
+ {
+  "ref": "DEMO-1002",
+  "customer": "Demo Hardware Ltd",
+  "site": "Hillcrest 102",
+  "circuit": "CN-DEMO-0002",
+  "status": "Order Placed with Supplier",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Demo Hardware Ltd Hillcrest, 1 Example Street, Sampletown",
+  "id": "demo002",
+  "group": "Open Orders",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "cofRequested": "2026-11-02",
+  "cofReceived": "2026-11-03"
+ },
+ {
+  "ref": "DEMO-1003",
+  "customer": "Example Retail Co",
+  "site": "Lakeview 103",
+  "circuit": "CN-DEMO-0003",
+  "status": "Site Survey Scheduled",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Example Retail Co Lakeview, 1 Example Street, Sampletown",
+  "id": "demo003",
+  "group": "Open Orders",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "cofSigned": "2026-11-05",
+  "siteSurvey": "2026-12-02"
+ },
+ {
+  "ref": "DEMO-1004",
+  "customer": "Sample Pharmacy Group",
+  "site": "Parkhurst 104",
+  "circuit": "CN-DEMO-0004",
+  "status": "Awaiting Landlord Approval",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Sample Pharmacy Group Parkhurst, 1 Example Street, Sampletown",
+  "id": "demo004",
+  "group": "Open Orders",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "siteSurvey": "2026-11-10",
+  "landlordRecvSupplier": "2026-11-14"
+ },
+ {
+  "ref": "DEMO-1005",
+  "customer": "Demo Hardware Ltd",
+  "site": "Seaview 105",
+  "circuit": "CN-DEMO-0005",
+  "status": "Install Scheduled",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Demo Hardware Ltd Seaview, 1 Example Street, Sampletown",
+  "id": "demo005",
+  "group": "Open Orders",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "siteSurvey": "2026-11-04",
+  "installDate": "2026-12-04"
+ },
+ {
+  "ref": "DEMO-1006",
+  "customer": "Example Retail Co",
+  "site": "Northgate 106",
+  "circuit": "CN-DEMO-0006",
+  "status": "Cutover Scheduled",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Example Retail Co Northgate, 1 Example Street, Sampletown",
+  "id": "demo006",
+  "group": "Open Orders",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "installDate": "2026-11-20",
+  "cutoverDate": "2026-12-01"
+ },
+ {
+  "ref": "DEMO-1007",
+  "customer": "Sample Pharmacy Group",
+  "site": "Riverside 107",
+  "circuit": "CN-DEMO-0007",
+  "status": "On Hold",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Sample Pharmacy Group Riverside, 1 Example Street, Sampletown",
+  "id": "demo007",
+  "group": "Open Orders",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "notes": "Waiting on client budget sign-off"
+ },
+ {
+  "ref": "DEMO-1008",
+  "customer": "Demo Hardware Ltd",
+  "site": "Hillcrest 108",
+  "circuit": "CN-DEMO-0008",
+  "status": "Complete",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Demo Hardware Ltd Hillcrest, 1 Example Street, Sampletown",
+  "id": "demo008",
+  "group": "Completed",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "installDate": "2026-10-12",
+  "cutoverDate": "2026-10-19",
+  "serial": "SN-DEMO-0001",
+  "forecastHandover": "2026-10-20"
+ },
+ {
+  "ref": "DEMO-1009",
+  "customer": "Example Retail Co",
+  "site": "Lakeview 109",
+  "circuit": "CN-DEMO-0009",
+  "status": "Complete",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Example Retail Co Lakeview, 1 Example Street, Sampletown",
+  "id": "demo009",
+  "group": "Completed",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "installDate": "2026-09-28",
+  "cutoverDate": "2026-10-03",
+  "serial": "SN-DEMO-0002",
+  "forecastHandover": "2026-10-05"
+ },
+ {
+  "ref": "DEMO-1010",
+  "customer": "Sample Pharmacy Group",
+  "site": "Parkhurst 110",
+  "circuit": "CN-DEMO-0010",
+  "status": "Cancelled",
+  "orderType": "New",
+  "service": "FirstNet Broadband",
+  "speed": "10Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Sample Pharmacy Group Parkhurst, 1 Example Street, Sampletown",
+  "id": "demo010",
+  "group": "Cancelled",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ],
+  "notes": "Client cancelled before order placement"
+ },
+ {
+  "ref": "DEMO-1011",
+  "customer": "Demo Hardware Ltd",
+  "site": "Seaview 111",
+  "circuit": "CN-DEMO-0011",
+  "status": "In Progress",
+  "orderType": "Upgrade",
+  "service": "FirstNet Broadband",
+  "speed": "50Mbps",
+  "linkRole": "Primary",
+  "supplier": "Example Supplier",
+  "supplierService": "Fibre",
+  "address": "Demo Hardware Ltd Seaview, 1 Example Street, Sampletown",
+  "id": "demo011",
+  "group": "Renewals/Upgrades/Downgrades",
+  "createdAt": "2026-10-01T08:00:00.000+02:00",
+  "updatedAt": "2026-11-20T08:00:00.000+02:00",
+  "updates": [],
+  "subs": [],
+  "log": [
+   {
+    "at": "2026-10-01T08:00:00.000+02:00",
+    "text": "Sample order (fictional data)"
+   }
+  ]
+ }
+]
