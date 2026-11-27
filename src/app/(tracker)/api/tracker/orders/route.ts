@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createOrder, listOrders, ValidationError } from '@/lib/tracker-db';
 import { isBoardId } from '@/lib/tracker-fields';
+import { readTeam } from '@/lib/team';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export async function POST(req: Request) {
     site?: string;
     groupName?: string;
     storeCode?: string;
+    owner?: string;
   } | null;
   const board = body?.board ?? 'orders';
   const customer = body?.customer?.trim();
@@ -30,7 +32,9 @@ export async function POST(req: Request) {
       customer,
       groupName,
       site: body?.site,
-      storeCode: body?.storeCode
+      storeCode: body?.storeCode,
+      // Only people on the team list can be made owners.
+      owner: body?.owner && readTeam().includes(body.owner) ? body.owner : null
     });
     return NextResponse.json({ order }, { status: 201 });
   } catch (e) {

@@ -187,3 +187,12 @@ export const SECTIONS: { title: string; fields: OrderField[] }[] = [
 
 export const DATE_FIELDS = new Set<OrderField>(SECTIONS.find((s) => s.title === 'Dates')!.fields);
 export const WIDE_FIELDS = new Set<OrderField>(['notes', 'address']);
+
+/** The person using this device ("Posting as" / My work), remembered in the browser; '' when not chosen. */
+export function currentPerson(): string {
+  try {
+    return localStorage.getItem('sd-tracker:author') ?? '';
+  } catch {
+    return '';
+  }
+}

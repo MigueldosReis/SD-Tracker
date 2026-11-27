@@ -6,6 +6,10 @@ export const DEFAULT_THEME = 'vercel';
 
 export const THEMES = [
   {
+    name: 'SD Tracker',
+    value: 'sd'
+  },
+  {
     name: 'Claude',
     value: 'claude'
   },

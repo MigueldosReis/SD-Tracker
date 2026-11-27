@@ -48,6 +48,7 @@ import {
   BOARD_ICONS,
   boardHref,
   CLOSED,
+  currentPerson,
   dueDate,
   followUpOf,
   fmtDate,
@@ -504,7 +505,14 @@ export function OrdersBoard({
     const res = await fetch('/api/tracker/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ board: board.id, customer, site, groupName, storeCode })
+      body: JSON.stringify({
+        board: board.id,
+        customer,
+        site,
+        groupName,
+        storeCode,
+        owner: currentPerson()
+      })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -788,9 +796,12 @@ export function OrdersBoard({
                           !isCollapsed && 'rotate-90'
                         )}
                       />
-                      <span className='truncate font-semibold' style={{ color }}>
-                        {name}
-                      </span>
+                      <span
+                        aria-hidden
+                        className='size-2.5 shrink-0 rounded-full'
+                        style={{ background: color }}
+                      />
+                      <span className='truncate font-semibold'>{name}</span>
                       <Badge variant='secondary' className='tabular-nums'>
                         {rows.length.toLocaleString('en-ZA')}
                       </Badge>

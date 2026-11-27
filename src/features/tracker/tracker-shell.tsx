@@ -170,6 +170,24 @@ function BoardsSidebar({ active, summaries }: { active: string; summaries: Summa
                 <span>My work</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                render={
+                  <Link
+                    href='/automations'
+                    aria-label='Automations'
+                    aria-current={active === 'automations' ? 'page' : undefined}
+                  />
+                }
+                tooltip='Automations: what the tracker does for you'
+                isActive={active === 'automations'}
+                className={itemClass}
+                onClick={() => setOpenMobile(false)}
+              >
+                <Icons.sparkles />
+                <span>Automations</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
         {section('Delivery', main)}

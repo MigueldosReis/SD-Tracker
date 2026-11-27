@@ -2,9 +2,15 @@
 // Pure functions, shared by the My work page and its tests.
 import { STEP_RULES, stepState } from './journey';
 import { CLOSED_GROUPS, getBoard, type Order } from './tracker-fields';
-import { addWorkingDays, followUpState, nextFollowUp } from './working-days';
+import { addWorkingDays, followUpState, nextFollowUp, workingDaysBetween } from './working-days';
 
-export type AttentionKind = 'close' | 'date-passed' | 'late' | 'follow-up' | 'this-week';
+export type AttentionKind =
+  | 'close'
+  | 'date-passed'
+  | 'late'
+  | 'documents'
+  | 'follow-up'
+  | 'this-week';
 
 export type AttentionItem = {
   kind: AttentionKind;
@@ -24,6 +30,7 @@ export const KIND_LABEL: Record<AttentionKind, string> = {
   close: 'Ready to close',
   'date-passed': 'Booked date passed',
   late: 'Late for their step',
+  documents: 'Documents outstanding',
   'follow-up': 'Follow-ups due',
   'this-week': 'Coming up this week'
 };
@@ -31,6 +38,7 @@ export const KIND_ORDER: AttentionKind[] = [
   'close',
   'date-passed',
   'late',
+  'documents',
   'follow-up',
   'this-week'
 ];
@@ -39,6 +47,34 @@ const isOpenOrder = (o: Order) =>
   !(CLOSED_GROUPS as readonly string[]).includes(String(o.groupName ?? '')) &&
   o.status !== 'Complete' &&
   o.status !== 'Cancelled';
+
+const dayOf = (v: unknown) =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : '';
+
+/** Paperwork that should come back within a few working days. */
+export const DOC_CHASES = [
+  {
+    sent: 'cofRequested',
+    back: 'cofReceived',
+    days: 3,
+    label: 'COF requested from the supplier',
+    missing: 'not received yet'
+  },
+  {
+    sent: 'coverRequested',
+    back: 'coverReceived',
+    days: 3,
+    label: 'Cover page requested',
+    missing: 'not received yet'
+  },
+  {
+    sent: 'landlordSentClient',
+    back: 'landlordSignedFirstnet',
+    days: 5,
+    label: 'Landlord documents sent to the client',
+    missing: 'not signed yet'
+  }
+] as const;
 
 const DATE_FIELDS = [
   ['siteSurvey', 'Site survey'],
@@ -82,6 +118,23 @@ export function attentionFor(o: Order, today: string): AttentionItem[] {
       urgency: 600 + step.daysLate,
       detail: `${status}: ${step.summary}`
     });
+  }
+
+  // Documents that went out and have not come back.
+  for (const d of DOC_CHASES) {
+    const sent = dayOf(o[d.sent]);
+    if (!sent || dayOf(o[d.back])) continue;
+    const waited = workingDaysBetween(sent, today);
+    if (waited > d.days) {
+      out.push({
+        kind: 'documents',
+        orderId: o.id,
+        board,
+        urgency: 500 + waited,
+        date: sent,
+        detail: `${d.label} ${waited} working days ago, ${d.missing}`
+      });
+    }
   }
 
   if (def?.followUp) {

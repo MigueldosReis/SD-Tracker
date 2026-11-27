@@ -54,6 +54,8 @@ const KIND_HELP: Record<AttentionKind, string> = {
   'date-passed':
     'A booked survey, install or cutover date has passed but the status has not moved.',
   late: 'Longer than usual in their status.',
+  documents:
+    'COFs and cover pages not back after 3 working days; landlord documents not signed after 5.',
   'follow-up': 'Follow-up due today or overdue (every 3 working days).',
   'this-week': 'Surveys, installs and cutovers in the next 5 working days.'
 };
@@ -61,6 +63,7 @@ const KIND_TONE: Record<AttentionKind, string> = {
   close: 'border-l-emerald-500',
   'date-passed': 'border-l-destructive',
   late: 'border-l-destructive',
+  documents: 'border-l-violet-500',
   'follow-up': 'border-l-amber-500',
   'this-week': 'border-l-sky-500'
 };

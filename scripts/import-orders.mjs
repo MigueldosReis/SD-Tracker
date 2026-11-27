@@ -4,14 +4,17 @@
 // fictional data/seed.sample.json is used so the app still runs from a fresh clone.
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { ORDER_FIELDS, boardFor } from '../src/lib/tracker-fields.ts';
 
 const src = process.argv[2] ?? (existsSync('data/seed.json') ? 'data/seed.json' : 'data/seed.sample.json');
 console.log(`importing from ${src}`);
 const rows = JSON.parse(readFileSync(src, 'utf8'));
-mkdirSync('data', { recursive: true });
-rmSync('data/tracker.db', { force: true });
-const db = new DatabaseSync('data/tracker.db');
+// TRACKER_DB_PATH lets tests build a throwaway database (the app reads the same variable).
+const OUT = process.env.TRACKER_DB_PATH ?? 'data/tracker.db';
+mkdirSync(dirname(OUT), { recursive: true });
+rmSync(OUT, { force: true });
+const db = new DatabaseSync(OUT);
 
 const cols = ORDER_FIELDS.map((f) => `"${f}"`).join(', ');
 db.exec(`

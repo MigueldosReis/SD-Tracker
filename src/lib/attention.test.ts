@@ -65,6 +65,25 @@ describe('attentionFor', () => {
     ).toEqual(['follow-up']);
     expect(attentionFor(order({ ...o, board: 'orders' }), today)).toEqual([]);
   });
+  test('documents that have not come back', () => {
+    const cof = attentionFor(
+      order({ status: 'Order to be Placed', cofRequested: '2026-11-19' }),
+      today
+    );
+    expect(cof).toEqual([
+      expect.objectContaining({
+        kind: 'documents',
+        detail: 'COF requested from the supplier 5 working days ago, not received yet'
+      })
+    ]);
+    expect(
+      attentionFor(order({ cofRequested: '2026-11-19', cofReceived: '2026-11-20' }), today)
+    ).toEqual([]);
+    expect(attentionFor(order({ cofRequested: '2026-11-23' }), today)).toEqual([]);
+    expect(attentionFor(order({ landlordSentClient: '2026-11-18' }), today)[0].detail).toContain(
+      'not signed yet'
+    );
+  });
   test('closed orders need nothing', () => {
     expect(attentionFor(order({ status: 'Complete' }), today)).toEqual([]);
     expect(

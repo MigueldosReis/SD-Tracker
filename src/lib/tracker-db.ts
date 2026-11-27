@@ -18,6 +18,7 @@ import {
   type OrderField
 } from './tracker-fields';
 import { followUpState, nextFollowUp, todayZA } from './working-days';
+import { automate } from './automations';
 
 const DB_PATH = process.env.TRACKER_DB_PATH ?? path.join(process.cwd(), 'data', 'tracker.db');
 
@@ -237,8 +238,15 @@ export function updateOrder(id: string, patch: Record<string, unknown>): Order {
     if (site !== current.site) changes.site = site;
     else delete changes.site;
   }
+  if (Object.keys(changes).length === 0) return current;
+
+  // Built-in automations (src/lib/automations.ts) add their changes; explicit edits always win.
+  const auto = automate(current, changes, todayZA());
+  for (const [k, v] of Object.entries(auto.extra)) {
+    const f = k as OrderField;
+    if (!(f in changes) && v !== current[f]) changes[f] = v;
+  }
   const keys = Object.keys(changes) as OrderField[];
-  if (keys.length === 0) return current;
 
   // A status change needs its date/serial to be filled in (either already, or in the same save).
   if (changes.status) {
@@ -265,6 +273,7 @@ export function updateOrder(id: string, patch: Record<string, unknown>): Order {
       id
     );
     const log = d.prepare('INSERT INTO order_log (orderId, at, text) VALUES (?, ?, ?)');
+    for (const n of auto.notes) log.run(id, at, n);
     for (const k of keys) {
       if (k === 'status')
         log.run(id, at, `Status changed from ${current.status ?? '(none)'} to ${changes.status}`);
@@ -304,6 +313,8 @@ export function createOrder(init: {
   site?: string;
   groupName: string;
   storeCode?: string;
+  /** Who is adding the order; they become its owner (automation "New orders get an owner"). */
+  owner?: string | null;
 }): Order {
   const board = getBoard(init.board);
   if (!board) throw new ValidationError('Unknown board', 'board');
@@ -324,7 +335,7 @@ export function createOrder(init: {
   d.exec('BEGIN');
   try {
     d.prepare(
-      'INSERT INTO orders (id, board, customer, site, storeCode, groupName, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO orders (id, board, customer, site, storeCode, groupName, status, owner, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(
       id,
       board.id,
@@ -333,6 +344,7 @@ export function createOrder(init: {
       storeCode,
       init.groupName,
       'Awaiting Internal Approval',
+      init.owner?.trim() || null,
       at,
       at
     );
@@ -341,6 +353,13 @@ export function createOrder(init: {
       at,
       `Order created in ${board.title} · ${init.groupName}`
     );
+    if (init.owner?.trim()) {
+      d.prepare('INSERT INTO order_log (orderId, at, text) VALUES (?, ?, ?)').run(
+        id,
+        at,
+        `Automation (New orders get an owner): owner set to ${init.owner.trim()}, who added the order`
+      );
+    }
     d.exec('COMMIT');
   } catch (e) {
     d.exec('ROLLBACK');
@@ -421,5 +440,28 @@ export function recentUpdates(days = 30, limit = 300): RecentUpdate[] {
        FROM order_updates u JOIN orders o ON o.id = u.orderId WHERE u.at >= ? ORDER BY u.n DESC LIMIT ?`
     )
     .all(since, limit) as unknown as RecentUpdate[];
+  return rows.map(plain);
+}
+
+export type AutomationRun = {
+  at: string;
+  orderId: string;
+  text: string;
+  board: string | null;
+  customer: string | null;
+  site: string | null;
+  storeCode: string | null;
+  ref: string | null;
+};
+
+/** What the built-in automations did recently (newest first), from the activity log. */
+export function automationRuns(days = 30, limit = 200): AutomationRun[] {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const rows = db()
+    .prepare(
+      `SELECT l.at, l.orderId, l.text, o.board, o.customer, o.site, o.storeCode, o.ref FROM order_log l
+       JOIN orders o ON o.id = l.orderId WHERE l.text LIKE 'Automation (%' AND l.at >= ? ORDER BY l.n DESC LIMIT ?`
+    )
+    .all(since, limit) as unknown as AutomationRun[];
   return rows.map(plain);
 }
