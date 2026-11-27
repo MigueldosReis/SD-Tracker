@@ -16,7 +16,8 @@ Service delivery tracker for Firstnet connectivity orders, built to replace the 
 - **Roadmap**: `docs/roadmap.md`.
 - **Artifact**: the live team tool is the claude.ai artifact "Connectivity Order Tracking"; keep its features in step with the app.
 - **Gantt**: `src/lib/gantt.ts` (bar and handover estimate per order from the journey rules; tested) and `src/features/tracker/gantt-view.tsx` (`?view=gantt&zoom=`). Boards with `noTimeline` (MRP Project Orders, Landlord Approval) have no Gantt.
-- **Still to build**: notifications, later layers of the source data (`update-*.json`), Postgres/Supabase, replacing Clerk.
+- **Notifications**: `src/lib/notifications.ts` decides who is told (tested); stored in the `notifications` table by `updateOrder`/`addUpdate` in `tracker-db.ts`; API `/api/tracker/notifications`; bell in `notifications-bell.tsx`. The person making a change is sent as the `X-Tracker-Person` header (`personHeaders()` in `shared.ts`, checked against the team by `personFrom()` in `team.ts`). shortcut: identity is self-chosen in the browser, not signed in; replace with real sign-in when Clerk is swapped out.
+- **Still to build**: email/chat digests, later layers of the source data (`update-*.json`), Postgres/Supabase, replacing Clerk.
 - Run: `bun install`, `node scripts/import-orders.mjs`, `bun dev`, open `/orders`. If `bun dev` stops on an upgrade notice, run it again.
 
 ---

@@ -196,3 +196,24 @@ export function currentPerson(): string {
     return '';
   }
 }
+
+export const PERSON_EVENT = 'sd-tracker:person';
+
+/** Remember who is using this device and tell the rest of the page (the notifications bell). */
+export function setCurrentPerson(name: string) {
+  try {
+    localStorage.setItem('sd-tracker:author', name);
+  } catch {
+    /* not available */
+  }
+  window.dispatchEvent(new Event(PERSON_EVENT));
+}
+
+/** Headers for requests that change data: JSON, plus who is making the change (for notifications). */
+export function personHeaders(): Record<string, string> {
+  const me = currentPerson();
+  return {
+    'Content-Type': 'application/json',
+    ...(me ? { 'X-Tracker-Person': encodeURIComponent(me) } : {})
+  };
+}

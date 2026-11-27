@@ -27,7 +27,16 @@ import { getBoard, type Order } from '@/lib/tracker-fields';
 import { useTeam } from './team-context';
 import { todayZA } from '@/lib/working-days';
 import { cn } from '@/lib/utils';
-import { boardHref, fmtDate, fmtDateTime, orderTitle, str, type Summary } from './shared';
+import {
+  boardHref,
+  fmtDate,
+  fmtDateTime,
+  orderTitle,
+  personHeaders,
+  setCurrentPerson,
+  str,
+  type Summary
+} from './shared';
 import { StatusBadge } from './status-controls';
 import { TrackerShell } from './tracker-shell';
 import { MentionText } from './updates-panel';
@@ -133,11 +142,7 @@ export function MyWork({
   function choose(v: string) {
     setPicked(v);
     if (team.includes(v)) {
-      try {
-        localStorage.setItem(ME_KEY, v);
-      } catch {
-        /* not available */
-      }
+      setCurrentPerson(v);
     }
   }
 
@@ -146,7 +151,7 @@ export function MyWork({
     setBusy(item.orderId);
     const res = await fetch(`/api/tracker/orders/${encodeURIComponent(item.orderId)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: personHeaders(),
       body: JSON.stringify(item.action.patch)
     }).catch(() => null);
     const data = res

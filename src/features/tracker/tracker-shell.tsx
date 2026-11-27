@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Icons } from '@/components/icons';
+import { NotificationsBell } from './notifications-bell';
 import { ThemeModeToggle } from '@/components/themes/theme-mode-toggle';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -64,6 +65,7 @@ export function TrackerShell({
           </nav>
           <div className='ml-auto flex items-center gap-1'>
             {actions}
+            <NotificationsBell />
             <ThemeModeToggle />
           </div>
         </header>

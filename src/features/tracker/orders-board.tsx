@@ -63,6 +63,7 @@ import {
   fmtDate,
   isOpen,
   isoDate,
+  personHeaders,
   siteName,
   str,
   type LogEntry,
@@ -171,7 +172,7 @@ export function OrdersBoard({
       try {
         res = await fetch(url, {
           method,
-          headers: { 'Content-Type': 'application/json' },
+          headers: personHeaders(),
           body: JSON.stringify(body)
         });
       } catch {
@@ -350,7 +351,7 @@ export function OrdersBoard({
     try {
       res = await fetch('/api/tracker/orders/bulk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: personHeaders(),
         body: JSON.stringify({ ids, ...body })
       });
     } catch {
@@ -568,7 +569,7 @@ export function OrdersBoard({
   async function addOrder(groupName: string, customer: string, site: string, storeCode: string) {
     const res = await fetch('/api/tracker/orders', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: personHeaders(),
       body: JSON.stringify({
         board: board.id,
         customer,

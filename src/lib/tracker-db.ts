@@ -22,6 +22,7 @@ import {
 import { followUpState, nextFollowUp, todayZA } from './working-days';
 import { automate } from './automations';
 import { readTeam } from './team';
+import { forOrderChange, forUpdate, type NewNotification } from './notifications';
 
 const DB_PATH = process.env.TRACKER_DB_PATH ?? path.join(process.cwd(), 'data', 'tracker.db');
 
@@ -42,6 +43,7 @@ function migrate(d: DatabaseSync) {
   );
   const missing = ORDER_FIELDS.filter((f) => !have.has(f));
   d.exec(UPDATES_TABLE);
+  d.exec(NOTIFICATIONS_TABLE);
   // Landlord Approval became a view of MRP Project Orders: anything stored on it goes back to its source.
   if (have.has('board'))
     d.exec(`UPDATE orders SET board = 'mrp-projects' WHERE board = 'landlord-approval'`);
@@ -70,6 +72,25 @@ function migrate(d: DatabaseSync) {
 export const UPDATES_TABLE = `CREATE TABLE IF NOT EXISTS order_updates (
   n INTEGER PRIMARY KEY AUTOINCREMENT, orderId TEXT NOT NULL, at TEXT NOT NULL, author TEXT, text TEXT NOT NULL);
   CREATE INDEX IF NOT EXISTS idx_updates_order ON order_updates(orderId);`;
+
+export const NOTIFICATIONS_TABLE = `CREATE TABLE IF NOT EXISTS notifications (
+  n INTEGER PRIMARY KEY AUTOINCREMENT, recipient TEXT NOT NULL, kind TEXT NOT NULL, orderId TEXT NOT NULL,
+  actor TEXT, text TEXT NOT NULL, at TEXT NOT NULL, readAt TEXT);
+  CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient, n);`;
+
+/** Store notifications (inside the caller's transaction). */
+function notify(
+  d: DatabaseSync,
+  orderId: string,
+  actor: string | null,
+  at: string,
+  list: NewNotification[]
+) {
+  const ins = d.prepare(
+    'INSERT INTO notifications (recipient, kind, orderId, actor, text, at) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  for (const x of list) ins.run(x.recipient, x.kind, orderId, actor, x.text, at);
+}
 
 const SELECT_COLS =
   ['id', ...ORDER_FIELDS].map((f) => `o."${f}"`).join(', ') +
@@ -162,6 +183,8 @@ export function addUpdate(id: string, text: string, author: string | null): Upda
       body
     );
     d.prepare('UPDATE orders SET updatedAt = ? WHERE id = ?').run(at, id);
+    const who = author?.trim() || null;
+    notify(d, id, who, at, forUpdate(body, who, getOrder(id)?.owner, readTeam()));
     d.exec('COMMIT');
   } catch (e) {
     d.exec('ROLLBACK');
@@ -198,8 +221,15 @@ export class ValidationError extends Error {
   }
 }
 
-/** Apply a partial update. Returns the updated order. Throws ValidationError on bad input. */
-export function updateOrder(id: string, patch: Record<string, unknown>): Order {
+/**
+ * Apply a partial update. Returns the updated order. Throws ValidationError on bad input.
+ * `actor` is the team member making the change (for notifications), or null when unknown.
+ */
+export function updateOrder(
+  id: string,
+  patch: Record<string, unknown>,
+  actor: string | null = null
+): Order {
   const current = getOrder(id);
   if (!current) throw new ValidationError('Order not found');
 
@@ -300,6 +330,20 @@ export function updateOrder(id: string, patch: Record<string, unknown>): Order {
     );
     const log = d.prepare('INSERT INTO order_log (orderId, at, text) VALUES (?, ?, ?)');
     for (const n of auto.notes) log.run(id, at, n);
+    notify(
+      d,
+      id,
+      actor,
+      at,
+      forOrderChange(
+        current,
+        {
+          owner: 'owner' in changes ? changes.owner : current.owner,
+          status: 'status' in changes ? changes.status : current.status
+        },
+        actor
+      )
+    );
     for (const k of keys) {
       if (k === 'status')
         log.run(id, at, `Status changed from ${current.status ?? '(none)'} to ${changes.status}`);
@@ -324,6 +368,7 @@ export function deleteOrder(id: string): boolean {
   try {
     d.prepare('DELETE FROM order_log WHERE orderId = ?').run(id);
     d.prepare('DELETE FROM order_updates WHERE orderId = ?').run(id);
+    d.prepare('DELETE FROM notifications WHERE orderId = ?').run(id);
     const r = d.prepare('DELETE FROM orders WHERE id = ?').run(id);
     d.exec('COMMIT');
     return Number(r.changes) > 0;
@@ -429,10 +474,14 @@ export function recordFollowUp(id: string, note?: string): Order {
 export type BulkResult = { id: string; ok: boolean; error?: string; order?: Order };
 
 /** Apply the same change to many orders. Each order goes through the same rules as a single edit. */
-export function bulkUpdate(ids: string[], patch: Record<string, unknown>): BulkResult[] {
+export function bulkUpdate(
+  ids: string[],
+  patch: Record<string, unknown>,
+  actor: string | null = null
+): BulkResult[] {
   return ids.map((id) => {
     try {
-      return { id, ok: true, order: updateOrder(id, patch) };
+      return { id, ok: true, order: updateOrder(id, patch, actor) };
     } catch (e) {
       if (e instanceof ValidationError) return { id, ok: false, error: e.message };
       throw e;
@@ -499,4 +548,52 @@ export function automationRuns(days = 30, limit = 200): AutomationRun[] {
     )
     .all(since, limit) as unknown as AutomationRun[];
   return rows.map(plain);
+}
+
+export type Notification = {
+  n: number;
+  kind: string;
+  orderId: string;
+  actor: string | null;
+  text: string;
+  at: string;
+  readAt: string | null;
+  board: string | null;
+  customer: string | null;
+  site: string | null;
+  storeCode: string | null;
+  ref: string | null;
+};
+
+/** Someone's latest notifications (newest first) and how many are unread. */
+export function listNotifications(
+  recipient: string,
+  limit = 40
+): { items: Notification[]; unread: number } {
+  const d = db();
+  const items = d
+    .prepare(
+      `SELECT x.n, x.kind, x.orderId, x.actor, x.text, x.at, x.readAt, o.board, o.customer, o.site, o.storeCode, o.ref
+       FROM notifications x JOIN orders o ON o.id = x.orderId WHERE x.recipient = ? ORDER BY x.n DESC LIMIT ?`
+    )
+    .all(recipient, limit) as unknown as Notification[];
+  const { c } = d
+    .prepare('SELECT COUNT(*) AS c FROM notifications WHERE recipient = ? AND readAt IS NULL')
+    .get(recipient) as { c: number };
+  return { items: items.map(plain), unread: Number(c) };
+}
+
+/** Mark one notification (by `n`) or all of someone's notifications as read. */
+export function markNotificationsRead(recipient: string, n?: number): void {
+  const at = nowIso();
+  if (n === undefined)
+    db()
+      .prepare('UPDATE notifications SET readAt = ? WHERE recipient = ? AND readAt IS NULL')
+      .run(at, recipient);
+  else
+    db()
+      .prepare(
+        'UPDATE notifications SET readAt = ? WHERE recipient = ? AND n = ? AND readAt IS NULL'
+      )
+      .run(at, recipient, n);
 }

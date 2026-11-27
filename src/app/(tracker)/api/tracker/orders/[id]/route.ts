@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { personFrom } from '@/lib/team';
 import { deleteOrder, getLog, getOrder, updateOrder, ValidationError } from '@/lib/tracker-db';
 
 export const dynamic = 'force-dynamic';
@@ -18,11 +19,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: 'Expected a JSON object' }, { status: 400 });
   }
   try {
-    const order = updateOrder(id, body as Record<string, unknown>);
+    const order = updateOrder(id, body as Record<string, unknown>, personFrom(req));
     return NextResponse.json({ order, log: getLog(id) });
   } catch (e) {
     if (e instanceof ValidationError) {
-      return NextResponse.json({ error: e.message, field: e.field }, { status: e.message === 'Order not found' ? 404 : 400 });
+      return NextResponse.json(
+        { error: e.message, field: e.field },
+        { status: e.message === 'Order not found' ? 404 : 400 }
+      );
     }
     throw e;
   }

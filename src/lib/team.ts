@@ -26,3 +26,16 @@ export function readTeam(): string[] {
     return [];
   }
 }
+
+/** The team member making a request (the X-Tracker-Person header the browser sends), or null. */
+export function personFrom(req: Request): string | null {
+  const raw = req.headers.get('x-tracker-person');
+  if (!raw) return null;
+  let name: string;
+  try {
+    name = decodeURIComponent(raw).trim();
+  } catch {
+    return null;
+  }
+  return readTeam().includes(name) ? name : null;
+}

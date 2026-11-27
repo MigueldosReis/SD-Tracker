@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { personFrom } from '@/lib/team';
 import { bulkDelete, bulkUpdate } from '@/lib/tracker-db';
 
 export const dynamic = 'force-dynamic';
@@ -23,5 +24,7 @@ export async function POST(req: Request) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
     return NextResponse.json({ error: 'Expected a change to apply' }, { status: 400 });
   }
-  return NextResponse.json({ results: bulkUpdate(ids, patch as Record<string, unknown>) });
+  return NextResponse.json({
+    results: bulkUpdate(ids, patch as Record<string, unknown>, personFrom(req))
+  });
 }

@@ -48,7 +48,7 @@ TrustRadius reviews, ClickUp's monday.com review, monday.com support docs.
 
 ## Next
 
-1. **Notifications**: a daily email or Teams/Slack digest of each person's My work (needs sign-in and a mail or chat connection).
+1. **Notifications**: in-app bell done (mentions, ownership, status changes and updates on your orders, desktop alerts). Still to do: a daily email or Teams/Slack digest of each person's My work (needs sign-in and a mail or chat connection).
 2. **More built-in reminders**: e.g. COF requested but not received after 3 working days; landlord documents sent to the client but not signed after 5.
 3. **File attachments** on orders (COFs, landlord documents, handover packs).
 4. **Overview dashboard across boards**: open orders by step and supplier, late orders by who to chase,

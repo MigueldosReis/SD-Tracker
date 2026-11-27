@@ -14,7 +14,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { mentions } from '@/lib/attention';
 import { useTeam } from './team-context';
-import { fmtDateTime } from './shared';
+import { fmtDateTime, setCurrentPerson } from './shared';
 
 type Update = { n: number; at: string; author: string | null; text: string };
 const AUTHOR_KEY = 'sd-tracker:author';
@@ -144,11 +144,7 @@ export function UpdatesPanel({
             onValueChange={(v) => {
               const a = String(v ?? '');
               setPicked(a);
-              try {
-                localStorage.setItem(AUTHOR_KEY, a);
-              } catch {
-                /* not available */
-              }
+              setCurrentPerson(a);
             }}
           >
             <SelectTrigger size='sm' className='w-48' aria-label='Posting as'>
