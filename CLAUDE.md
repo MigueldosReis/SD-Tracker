@@ -15,7 +15,8 @@ Service delivery tracker for Firstnet connectivity orders, built to replace the 
 - **Product rules**: 16-step delivery process; legacy statuses stay as they are; MRP (Mr Price) orders are NOT shown on the Orders page (they live on the MRP boards); every MRP site name carries its store code (enforced in `tracker-db.ts`).
 - **Roadmap**: `docs/roadmap.md`.
 - **Artifact**: the live team tool is the claude.ai artifact "Connectivity Order Tracking"; keep its features in step with the app.
-- **Still to build**: Gantt view, notifications, later layers of the source data (`update-*.json`), Postgres/Supabase, replacing Clerk.
+- **Gantt**: `src/lib/gantt.ts` (bar and handover estimate per order from the journey rules; tested) and `src/features/tracker/gantt-view.tsx` (`?view=gantt&zoom=`). Boards with `noTimeline` (MRP Project Orders, Landlord Approval) have no Gantt.
+- **Still to build**: notifications, later layers of the source data (`update-*.json`), Postgres/Supabase, replacing Clerk.
 - Run: `bun install`, `node scripts/import-orders.mjs`, `bun dev`, open `/orders`. If `bun dev` stops on an upgrade notice, run it again.
 
 ---

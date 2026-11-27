@@ -24,6 +24,8 @@ const baseConfig: NextConfig = {
     ]
   },
   transpilePackages: ['geist'],
+  // Keep the dev badge off the sidebar footer.
+  devIndicators: { position: 'bottom-right' },
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production'
   }

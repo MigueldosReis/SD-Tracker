@@ -106,9 +106,7 @@ function BoardsSidebar({ active, summaries }: { active: string; summaries: Summa
                 <Icon />
                 <span>{s.title}</span>
               </SidebarMenuButton>
-              <SidebarMenuBadge
-                className={s.followUpsDue > 0 ? 'bg-destructive/15 text-destructive' : ''}
-              >
+              <SidebarMenuBadge className={s.followUpsDue > 0 ? 'bg-destructive text-white' : ''}>
                 {s.followUpsDue > 0 ? (
                   <span>
                     <span className='sr-only'>Follow-ups due: </span>

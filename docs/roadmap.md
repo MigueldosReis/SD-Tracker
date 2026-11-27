@@ -30,13 +30,13 @@ TrustRadius reviews, ClickUp's monday.com review, monday.com support docs.
 | Follow-ups every 3 working days | Date automations; no South African holidays | Built in, skips weekends and SA public holidays (Easter, Sunday-to-Monday rule) |
 | Mr Price store codes in site names | Manual | Enforced automatically |
 | Landlord approval list | Separate board kept in sync by hand | A live view of MRP Project Orders in landlord approval |
-| Views | Table, Kanban, Calendar (Gantt on paid plans) | Table, Kanban (by delivery step), Calendar |
+| Views | Table, Kanban, Calendar (Gantt on paid plans) | Table, Kanban (by delivery step), Calendar, Gantt with handover estimates |
 | Cost | Per seat, features by plan | No seats, no plans |
 
 ## Shipped
 
 - Boards: Orders, MRP New Stores, MRP Project Orders, Landlord Approval (view), Feasibility, Dual Supplier.
-- Table, Kanban and Calendar views; filters and view kept in the address bar.
+- Table, Kanban, Calendar and Gantt views; filters and view kept in the address bar.
 - Updates on every order; activity log of every change.
 - Late-for-step flags with the 16-step journey bar on each order.
 - Bulk status / owner / group / delete, with the same rules as single edits.
@@ -56,4 +56,4 @@ TrustRadius reviews, ClickUp's monday.com review, monday.com support docs.
 5. **Chase list**: late orders grouped by supplier with a copy-ready email, as in the current artifact.
 6. **Apply the `update-*.json` data layers** from the original tracker.
 7. **Sign-in and real users** (replace Clerk or set its keys), then **Postgres/Supabase** for a shared database.
-8. **Gantt/timeline** for install programmes (Mr Price new-store roll-outs).
+8. ~~**Gantt/timeline**~~ done: Gantt view on every board except MRP Project Orders and Landlord Approval.

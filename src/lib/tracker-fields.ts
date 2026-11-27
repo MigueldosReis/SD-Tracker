@@ -144,6 +144,8 @@ export type BoardDef = {
    * Orders are added on the source board and leave the view when their status moves on.
    */
   view?: { source: BoardId; statuses: readonly string[] };
+  /** No delivery timeline (Gantt) for this board's orders. */
+  noTimeline?: true;
 };
 
 /** Statuses that mean an MRP project store is in landlord approval (the last two are legacy statuses). */
@@ -176,7 +178,8 @@ export const BOARDS: readonly BoardDef[] = [
     description: 'Mr Price Group project orders: upgrades, relocations and other store changes',
     groups: ['Mr Price Project Orders'],
     followUp: false,
-    mrp: true
+    mrp: true,
+    noTimeline: true
   },
   {
     id: 'feasibility',
@@ -201,6 +204,7 @@ export const BOARDS: readonly BoardDef[] = [
     groups: ['Mr Price Project Orders'],
     followUp: true,
     mrp: true,
+    noTimeline: true,
     view: { source: 'mrp-projects', statuses: LANDLORD_STATUSES }
   }
 ];

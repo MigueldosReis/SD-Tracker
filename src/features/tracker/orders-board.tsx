@@ -1,12 +1,21 @@
 'use client';
 
-import { useCallback, useDeferredValue, useMemo, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react';
 import Link from 'next/link';
 import { parseAsBoolean, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Kbd } from '@/components/ui/kbd';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
@@ -60,15 +69,21 @@ import {
   type SaveResult,
   type Summary
 } from './shared';
+import { GanttView } from './gantt-view';
 import { FollowUpBadge, StatusMenu } from './status-controls';
 import { groupColor } from './status-style';
 import { TrackerShell } from './tracker-shell';
 
 const ROW_CAP = 100;
 const ALL = '__all__';
-const VIEWS = ['table', 'kanban', 'calendar'] as const;
+const VIEWS = ['table', 'kanban', 'calendar', 'gantt'] as const;
 type View = (typeof VIEWS)[number];
-const VIEW_LABEL: Record<View, string> = { table: 'Table', kanban: 'Kanban', calendar: 'Calendar' };
+const VIEW_LABEL: Record<View, string> = {
+  table: 'Table',
+  kanban: 'Kanban',
+  calendar: 'Calendar',
+  gantt: 'Gantt'
+};
 
 type Column = { key: string; header: string; cell: (o: Order) => ReactNode; className?: string };
 type BulkResult = { id: string; ok: boolean; error?: string; order?: Order };
@@ -102,18 +117,35 @@ export function OrdersBoard({
 }) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   // Filters, the view and the open order live in the URL, so a view can be bookmarked or shared.
-  const [{ q, status: statusFilter, due: dueOnly, late: lateOnly, view, order: openId }, setUrl] =
-    useQueryStates(
-      {
-        q: parseAsString.withDefault(''),
-        status: parseAsString.withDefault(''),
-        due: parseAsBoolean.withDefault(false),
-        late: parseAsBoolean.withDefault(false),
-        view: parseAsStringLiteral(VIEWS).withDefault('table'),
-        order: parseAsString
-      },
-      { history: 'replace' }
-    );
+  const [
+    { q, status: statusFilter, due: dueOnly, late: lateOnly, view: urlView, order: openId },
+    setUrl
+  ] = useQueryStates(
+    {
+      q: parseAsString.withDefault(''),
+      status: parseAsString.withDefault(''),
+      due: parseAsBoolean.withDefault(false),
+      late: parseAsBoolean.withDefault(false),
+      view: parseAsStringLiteral(VIEWS).withDefault('table'),
+      order: parseAsString
+    },
+    { history: 'replace' }
+  );
+  // Boards without a timeline fall back to the table if a Gantt link is opened on them.
+  const view: View = urlView === 'gantt' && board.noTimeline ? 'table' : urlView;
+  const searchRef = useRef<HTMLInputElement>(null);
+  // "/" jumps to search from anywhere on the board, unless you are already typing somewhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (t?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set(CLOSED));
   const [showAll, setShowAll] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState<string | null>(null);
@@ -663,8 +695,10 @@ export function OrdersBoard({
             <Icons.search aria-hidden />
           </InputGroupAddon>
           <InputGroupInput
+            ref={searchRef}
             type='search'
             name='q'
+            aria-keyshortcuts='/'
             autoComplete='off'
             spellCheck={false}
             aria-label='Search orders'
@@ -674,6 +708,11 @@ export function OrdersBoard({
             value={q}
             onChange={(e) => void setUrl({ q: e.target.value || null })}
           />
+          {!q && (
+            <InputGroupAddon align='inline-end' aria-hidden>
+              <Kbd title='Press / to search'>/</Kbd>
+            </InputGroupAddon>
+          )}
           {q && (
             <InputGroupAddon align='inline-end'>
               <InputGroupButton
@@ -752,7 +791,7 @@ export function OrdersBoard({
             {filtered.length.toLocaleString('en-ZA')} of {orders.length.toLocaleString('en-ZA')}
           </span>
           <div role='group' aria-label='View' className='bg-muted flex rounded-lg p-0.5'>
-            {VIEWS.map((v) => (
+            {VIEWS.filter((v) => v !== 'gantt' || !board.noTimeline).map((v) => (
               <button
                 key={v}
                 type='button'
@@ -783,6 +822,9 @@ export function OrdersBoard({
       )}
       {view === 'calendar' && (
         <CalendarView board={board} orders={filtered} today={today} onOpen={openOrder} />
+      )}
+      {view === 'gantt' && (
+        <GanttView board={board} orders={filtered} today={today} onOpen={openOrder} />
       )}
 
       {view === 'table' && (
@@ -1008,26 +1050,28 @@ function Stat({
         {icon}
         {label}
       </CardDescription>
-      <CardTitle
-        className={cn(
-          'text-3xl font-semibold tabular-nums',
-          tone === 'danger' && 'text-destructive',
-          tone === 'warning' && 'text-amber-600 dark:text-amber-400'
-        )}
-      >
-        {value.toLocaleString('en-ZA')}
-      </CardTitle>
-      {hint && <p className='text-muted-foreground text-xs text-pretty'>{hint}</p>}
+      <div className='flex items-center gap-3'>
+        <CardTitle
+          className={cn(
+            'text-3xl font-semibold tabular-nums',
+            tone === 'danger' && 'text-destructive',
+            tone === 'warning' && 'text-amber-600 dark:text-amber-400'
+          )}
+        >
+          {value.toLocaleString('en-ZA')}
+        </CardTitle>
+        {hint && <p className='text-muted-foreground line-clamp-2 text-xs text-pretty'>{hint}</p>}
+      </div>
     </CardHeader>
   );
-  if (!onClick) return <Card className='gap-0 py-4'>{body}</Card>;
+  if (!onClick) return <Card className='gap-0 py-3'>{body}</Card>;
   return (
     <Card className={cn('gap-0 p-0', active && 'ring-primary ring-2')}>
       <button
         type='button'
         onClick={onClick}
         aria-pressed={active}
-        className='hover:bg-muted/50 focus-visible:ring-ring rounded-xl py-4 text-left transition-colors outline-none focus-visible:ring-3'
+        className='hover:bg-muted/50 focus-visible:ring-ring rounded-xl py-3 text-left transition-colors outline-none focus-visible:ring-3'
       >
         {body}
       </button>
