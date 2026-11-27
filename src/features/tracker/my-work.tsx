@@ -148,10 +148,12 @@ export function MyWork({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(item.action.patch)
-    });
-    const data = await res.json().catch(() => ({}));
+    }).catch(() => null);
+    const data = res
+      ? await res.json().catch(() => ({}))
+      : { error: 'Could not reach the tracker. Check your connection and try again.' };
     setBusy(null);
-    if (!res.ok) {
+    if (!res?.ok) {
       toast.error(
         String(data.error ?? 'Could not change the order. Refresh the page and try again.')
       );
@@ -217,7 +219,7 @@ export function MyWork({
               key={k}
               href={`#${k}`}
               className={cn(
-                'bg-card hover:bg-muted/50 focus-visible:ring-ring/50 rounded-xl border border-l-4 p-4 outline-none focus-visible:ring-3',
+                'bg-card hover:bg-muted/50 focus-visible:ring-ring rounded-xl border border-l-4 p-4 outline-none focus-visible:ring-3',
                 KIND_TONE[k],
                 !n && 'opacity-60'
               )}

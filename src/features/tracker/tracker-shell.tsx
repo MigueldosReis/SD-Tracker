@@ -143,7 +143,9 @@ function BoardsSidebar({ active, summaries }: { active: string; summaries: Summa
               </div>
               <div className='grid flex-1 text-left text-sm leading-tight'>
                 <span className='truncate font-semibold'>SD Tracker</span>
-                <span className='text-muted-foreground truncate text-xs'>Service delivery</span>
+                <span className='text-sidebar-foreground/70 truncate text-xs'>
+                  Service delivery
+                </span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -194,7 +196,7 @@ function BoardsSidebar({ active, summaries }: { active: string; summaries: Summa
         {section('Mr Price', mrp)}
         {section('Follow-up boards', chase)}
       </SidebarContent>
-      <SidebarFooter className='text-muted-foreground px-4 pb-3 text-xs group-data-[collapsible=icon]:hidden'>
+      <SidebarFooter className='text-sidebar-foreground/70 px-4 pb-3 text-xs group-data-[collapsible=icon]:hidden'>
         Red badges count follow-ups due today or overdue.
       </SidebarFooter>
       <SidebarRail />

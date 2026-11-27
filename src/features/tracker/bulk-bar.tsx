@@ -77,7 +77,9 @@ export function BulkBar({
       <Button variant='ghost' size='icon-sm' aria-label='Clear selection' onClick={onClear}>
         <Icons.close />
       </Button>
-      <span className='px-1 text-sm font-medium tabular-nums'>{count} selected</span>
+      <span className='px-1 text-sm font-medium tabular-nums' role='status'>
+        {count} selected
+      </span>
       {pick(
         'Set status…',
         (s) => onApply({ status: s }, `Status set to ${s}`),
@@ -148,7 +150,7 @@ export function BulkBar({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {busy && <Icons.spinner aria-label='Working' className='size-4 animate-spin' />}
+      {busy && <Icons.spinner role='img' aria-label='Working' className='size-4 animate-spin' />}
     </div>
   );
 }

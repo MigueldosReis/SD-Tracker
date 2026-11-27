@@ -9,6 +9,7 @@ import { OTHER_STATUSES, PROCESS_STATUSES, type BoardDef, type Order } from '@/l
 import { cn } from '@/lib/utils';
 import { followUpOf, fmtDate, isOpen, isoDate, siteName, str } from './shared';
 import { statusColor } from './status-style';
+import { StatusMenu } from './status-controls';
 
 const CARD_CAP = 60;
 
@@ -62,21 +63,16 @@ export function KanbanView({
   return (
     <div className='flex flex-col gap-2'>
       <p className='text-muted-foreground text-sm'>
-        Open orders by delivery step. Drag a card to another column to change its status. Late
-        orders are listed first.
+        Open orders by delivery step. Change a status with the menu on a card, or drag the card to
+        another column. Late orders are listed first.
       </p>
-      <div
-        className='-mx-1 flex gap-3 overflow-x-auto px-1 pb-3'
-        role='list'
-        aria-label='Delivery steps'
-      >
+      <div className='-mx-1 flex gap-3 overflow-x-auto px-1 pb-3'>
         {columns.map(({ status, cards, legacy }) => (
-          // Drop target for drag and drop; keyboard users change status from the card's order panel instead.
+          // Drop target for drag and drop; the status menu on each card is the keyboard alternative.
           // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
           <section
             key={status}
-            role='listitem'
-            aria-label={`${status}: ${cards.length} orders`}
+            aria-labelledby={`col-${status.replace(/\W+/g, '-')}`}
             className={cn(
               'bg-muted/40 flex max-h-[calc(100dvh-16rem)] shrink-0 flex-col rounded-xl border',
               cards.length ? 'w-72' : 'w-48',
@@ -103,9 +99,13 @@ export function KanbanView({
                 className='size-2.5 shrink-0 rounded-sm'
                 style={{ background: statusColor(status) }}
               />
-              <h3 className='min-w-0 flex-1 truncate text-sm font-medium' title={status}>
+              <h2
+                id={`col-${status.replace(/\W+/g, '-')}`}
+                className='min-w-0 flex-1 truncate text-sm font-medium'
+                title={status}
+              >
                 {status}
-              </h3>
+              </h2>
               <Badge variant='secondary' className='tabular-nums'>
                 {cards.length}
               </Badge>
@@ -115,44 +115,50 @@ export function KanbanView({
                 <p className='text-muted-foreground px-1 py-2 text-xs'>Nothing at this step.</p>
               )}
               {cards.slice(0, CARD_CAP).map(({ o, step }) => (
-                <button
-                  key={o.id}
-                  type='button'
-                  draggable
-                  onDragStart={(e) => {
-                    setDragId(o.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                  }}
-                  onDragEnd={() => {
-                    setDragId(null);
-                    setOver(null);
-                  }}
-                  onClick={() => onOpen(o.id)}
-                  className={cn(
-                    'bg-card hover:border-ring focus-visible:ring-ring/50 flex flex-col gap-1 rounded-lg border p-2.5 text-left text-sm outline-none focus-visible:ring-3',
-                    step.late && 'border-l-destructive border-l-4',
-                    dragId === o.id && 'opacity-40'
-                  )}
-                >
-                  <span className='truncate font-medium'>{titleOf(board, o)}</span>
-                  {subOf(board, o) && (
-                    <span className='text-muted-foreground truncate text-xs'>
-                      {subOf(board, o)}
+                <div key={o.id} className='flex flex-col gap-1'>
+                  <button
+                    type='button'
+                    draggable
+                    onDragStart={(e) => {
+                      setDragId(o.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setOver(null);
+                    }}
+                    onClick={() => onOpen(o.id)}
+                    className={cn(
+                      'bg-card hover:border-ring focus-visible:ring-ring flex flex-col gap-1 rounded-lg border p-2.5 text-left text-sm outline-none focus-visible:ring-3',
+                      step.late && 'border-l-destructive border-l-4',
+                      dragId === o.id && 'opacity-40'
+                    )}
+                  >
+                    <span className='truncate font-medium'>{titleOf(board, o)}</span>
+                    {subOf(board, o) && (
+                      <span className='text-muted-foreground truncate text-xs'>
+                        {subOf(board, o)}
+                      </span>
+                    )}
+                    <span className='flex flex-wrap items-center gap-1.5 text-xs'>
+                      {step.late ? (
+                        <Badge variant='destructive' className='tabular-nums'>
+                          {step.daysLate > 0 ? `${step.daysLate}d late` : 'Late'}
+                        </Badge>
+                      ) : step.daysInStep > 0 || step.due ? (
+                        <span className='text-muted-foreground'>{step.summary}</span>
+                      ) : null}
+                      {o.supplier && !board.mrp ? (
+                        <span className='text-muted-foreground'>· {str(o.supplier)}</span>
+                      ) : null}
                     </span>
-                  )}
-                  <span className='flex flex-wrap items-center gap-1.5 text-xs'>
-                    {step.late ? (
-                      <Badge variant='destructive' className='tabular-nums'>
-                        {step.daysLate > 0 ? `${step.daysLate}d late` : 'Late'}
-                      </Badge>
-                    ) : step.daysInStep > 0 || step.due ? (
-                      <span className='text-muted-foreground'>{step.summary}</span>
-                    ) : null}
-                    {o.supplier && !board.mrp ? (
-                      <span className='text-muted-foreground'>· {str(o.supplier)}</span>
-                    ) : null}
-                  </span>
-                </button>
+                  </button>
+                  <StatusMenu
+                    status={str(o.status)}
+                    label={titleOf(board, o)}
+                    onChange={(s) => onStatusChange(o, s)}
+                  />
+                </div>
               ))}
               {cards.length > CARD_CAP && (
                 <p className='text-muted-foreground px-1 text-xs'>
@@ -196,6 +202,7 @@ export function CalendarView({
   today: string;
   onOpen: (id: string) => void;
 }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { days, missed } = useMemo(() => {
     const events: CalEvent[] = [];
     const missed: CalEvent[] = [];
@@ -227,7 +234,7 @@ export function CalendarView({
       onClick={() => onOpen(e.o.id)}
       title={`${e.kind}: ${titleOf(board, e.o)}${withDate ? ` (${fmtDate(e.date)})` : ''}`}
       className={cn(
-        'bg-card hover:bg-muted focus-visible:ring-ring/50 w-full truncate rounded-md border border-l-4 px-1.5 py-0.5 text-left text-xs outline-none focus-visible:ring-3',
+        'bg-card hover:bg-muted focus-visible:ring-ring w-full truncate rounded-md border border-l-4 px-1.5 py-0.5 text-left text-xs outline-none focus-visible:ring-3',
         KIND_STYLE[e.kind]
       )}
     >
@@ -297,9 +304,23 @@ export function CalendarView({
                   <span>{fmtDate(date, true)}</span>
                   {isToday && <span>Today</span>}
                 </div>
-                {events.slice(0, 4).map((e) => chip(e))}
+                {(expanded.has(date) ? events : events.slice(0, 4)).map((e) => chip(e))}
                 {events.length > 4 && (
-                  <span className='text-muted-foreground text-xs'>{events.length - 4} more</span>
+                  <button
+                    type='button'
+                    className='text-muted-foreground hover:text-foreground text-left text-xs underline-offset-2 hover:underline'
+                    aria-expanded={expanded.has(date)}
+                    onClick={() =>
+                      setExpanded((s) => {
+                        const n = new Set(s);
+                        if (n.has(date)) n.delete(date);
+                        else n.add(date);
+                        return n;
+                      })
+                    }
+                  >
+                    {expanded.has(date) ? 'Show less' : `${events.length - 4} more`}
+                  </button>
                 )}
               </div>
             );

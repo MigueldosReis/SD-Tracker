@@ -49,7 +49,7 @@ export function StatusMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Change status for ${label} (now ${status || 'no status'})`}
-        className='focus-visible:ring-ring/50 inline-flex max-w-full items-center gap-1 rounded-md text-white outline-none focus-visible:ring-3'
+        className='focus-visible:ring-ring inline-flex max-w-full items-center gap-1 rounded-md text-white outline-none focus-visible:ring-3'
         style={{ background: statusColor(status) }}
         onClick={(e) => e.stopPropagation()}
       >

@@ -5,6 +5,8 @@ import {
   BOARDS,
   CLOSED_GROUPS,
   EDITABLE_FIELDS,
+  OTHER_STATUSES,
+  PROCESS_STATUSES,
   MONEY_FIELDS,
   ORDER_FIELDS,
   STATUS_REQUIRES,
@@ -19,6 +21,7 @@ import {
 } from './tracker-fields';
 import { followUpState, nextFollowUp, todayZA } from './working-days';
 import { automate } from './automations';
+import { readTeam } from './team';
 
 const DB_PATH = process.env.TRACKER_DB_PATH ?? path.join(process.cwd(), 'data', 'tracker.db');
 
@@ -211,15 +214,38 @@ export function updateOrder(id: string, patch: Record<string, unknown>): Order {
       const num = typeof raw === 'number' ? raw : Number(String(raw).replace(/[ ,]/g, ''));
       if (!Number.isFinite(num)) throw new ValidationError(`${f} must be a number`, f);
       v = num;
-    } else if (typeof raw === 'string') v = raw.trim();
-    else throw new ValidationError(`${f} must be text`, f);
+    } else if (typeof raw === 'string') {
+      v = raw.trim();
+      const max = f === 'notes' || f === 'address' ? 5000 : 300;
+      if (v.length > max)
+        throw new ValidationError(
+          `${f} can be at most ${max.toLocaleString('en-ZA')} characters`,
+          f
+        );
+    } else throw new ValidationError(`${f} must be text`, f);
     if (f === 'groupName' && !v) throw new ValidationError('Group cannot be empty', f);
     if (f === 'board' && !isStoredBoardId(v))
       throw new ValidationError('Orders cannot be moved to that board', f);
-    if (f === 'lastFollowUp' && v !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(v))) {
+    if (
+      f === 'lastFollowUp' &&
+      v !== null &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(String(v)) || Number.isNaN(Date.parse(String(v))))
+    ) {
       throw new ValidationError('Last follow-up must be a date (YYYY-MM-DD)', f);
     }
     if (f === 'status' && !v) throw new ValidationError('Status cannot be empty', f);
+    // Statuses come from the journey list; legacy statuses already in the data keep working.
+    if (
+      f === 'status' &&
+      v !== current.status &&
+      ![...PROCESS_STATUSES, ...OTHER_STATUSES].includes(String(v) as never) &&
+      !db().prepare('SELECT 1 FROM orders WHERE status = ? LIMIT 1').get(v)
+    ) {
+      throw new ValidationError(`"${v}" is not a status in the tracker`, f);
+    }
+    if (f === 'owner' && v !== null && v !== current.owner && !readTeam().includes(String(v))) {
+      throw new ValidationError('The owner must be someone on the team', f);
+    }
     if (v !== current[f]) changes[f] = v;
   }
 
@@ -318,6 +344,15 @@ export function createOrder(init: {
 }): Order {
   const board = getBoard(init.board);
   if (!board) throw new ValidationError('Unknown board', 'board');
+  for (const [k, v] of Object.entries({
+    customer: init.customer,
+    site: init.site,
+    groupName: init.groupName,
+    storeCode: init.storeCode
+  })) {
+    if (v && v.length > 300)
+      throw new ValidationError(`${k} can be at most 300 characters`, k as OrderField);
+  }
   if (board.view) {
     const source = getBoard(board.view.source)!;
     throw new ValidationError(
@@ -381,7 +416,7 @@ export function recordFollowUp(id: string, note?: string): Order {
       at,
       id
     );
-    const text = note?.trim() ? `Followed up: ${note.trim()}` : 'Followed up';
+    const text = note?.trim() ? `Followed up: ${note.trim().slice(0, 2000)}` : 'Followed up';
     d.prepare('INSERT INTO order_log (orderId, at, text) VALUES (?, ?, ?)').run(id, at, text);
     d.exec('COMMIT');
   } catch (e) {

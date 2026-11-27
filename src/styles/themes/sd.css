@@ -14,11 +14,11 @@
   --muted-foreground: oklch(0.5 0.03 258);
   --accent: oklch(0.945 0.022 258);
   --accent-foreground: oklch(0.3 0.08 262);
-  --destructive: oklch(0.56 0.21 27);
+  --destructive: oklch(0.52 0.2 27);
   --destructive-foreground: oklch(0.99 0 0);
   --border: oklch(0.915 0.012 255);
   --input: oklch(0.9 0.014 255);
-  --ring: oklch(0.6 0.15 258);
+  --ring: oklch(0.5 0.17 260);
   --chart-1: oklch(0.5 0.17 260);
   --chart-2: oklch(0.62 0.13 195);
   --chart-3: oklch(0.7 0.15 75);

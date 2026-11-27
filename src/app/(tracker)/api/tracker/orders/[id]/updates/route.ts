@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { readTeam } from '@/lib/team';
 import { addUpdate, getOrder, getUpdates, ValidationError } from '@/lib/tracker-db';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const updates = addUpdate(
       id,
       typeof body.text === 'string' ? body.text : '',
-      typeof body.author === 'string' ? body.author : null
+      typeof body.author === 'string' && readTeam().includes(body.author) ? body.author : null
     );
     return NextResponse.json({ updates, order: getOrder(id) }, { status: 201 });
   } catch (e) {

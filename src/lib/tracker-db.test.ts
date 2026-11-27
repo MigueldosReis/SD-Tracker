@@ -9,6 +9,7 @@ import { todayZA } from './working-days';
 mock.module('server-only', () => ({}));
 const dbPath = path.join(mkdtempSync(path.join(tmpdir(), 'sd-tracker-test-')), 'tracker.db');
 process.env.TRACKER_DB_PATH = dbPath;
+process.env.TRACKER_TEAM_PATH = path.join(process.cwd(), 'data', 'team.sample.json');
 
 let t: typeof import('./tracker-db');
 
@@ -141,5 +142,16 @@ describe('built-in automations', () => {
   });
   test('automation runs are listed', () => {
     expect(t.automationRuns().length).toBeGreaterThan(0);
+  });
+});
+
+describe('input validation', () => {
+  test('unknown statuses, non-team owners, bad dates and oversized text are refused', () => {
+    const o = newOrder();
+    expect(() => t.updateOrder(o.id, { status: 'Made Up Status' })).toThrow('is not a status');
+    expect(() => t.updateOrder(o.id, { owner: 'Not On The Team' })).toThrow('someone on the team');
+    expect(() => t.updateOrder(o.id, { lastFollowUp: '2026-99-99' })).toThrow('must be a date');
+    expect(() => t.updateOrder(o.id, { site: 'x'.repeat(301) })).toThrow('at most 300');
+    expect(t.updateOrder(o.id, { owner: 'Alex Mokoena' }).owner).toBe('Alex Mokoena');
   });
 });

@@ -2,10 +2,10 @@ import { OTHER_STATUSES, PROCESS_STATUSES } from '@/lib/tracker-fields';
 
 // Meaningful anchors: done is green, cancelled is grey, on hold is amber.
 const FIXED: Record<string, string> = {
-  Complete: 'oklch(0.5 0.13 152)',
-  'Handover Sent': 'oklch(0.5 0.1 190)',
-  Cancelled: 'oklch(0.5 0.015 260)',
-  'On Hold': 'oklch(0.52 0.12 65)'
+  Complete: 'oklch(0.45 0.12 152)',
+  'Handover Sent': 'oklch(0.45 0.09 190)',
+  Cancelled: 'oklch(0.46 0.015 260)',
+  'On Hold': 'oklch(0.47 0.11 65)'
 };
 const ORDERED = [...PROCESS_STATUSES, ...OTHER_STATUSES] as string[];
 
@@ -16,7 +16,7 @@ function hash(s: string) {
 }
 
 /**
- * Solid, distinct colour per status, all at the same OKLCH lightness so white text reads on every one (about 5:1).
+ * Solid, distinct colour per status, all at the same OKLCH lightness so white text reads on every one (4.5:1 or better).
  * The delivery steps get evenly spread hues (golden angle); legacy statuses get a stable hue from their name.
  */
 export function statusColor(input: string | number | null | undefined): string {
@@ -25,7 +25,7 @@ export function statusColor(input: string | number | null | undefined): string {
   if (FIXED[status]) return FIXED[status];
   const i = ORDERED.indexOf(status);
   const hue = i >= 0 ? (250 + i * 137.508) % 360 : hash(status) % 360;
-  return `oklch(0.5 0.15 ${Math.round(hue)})`;
+  return `oklch(0.45 0.15 ${Math.round(hue)})`;
 }
 
 export const GROUP_COLORS: Record<string, string> = {

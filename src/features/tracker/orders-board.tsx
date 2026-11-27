@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { parseAsBoolean, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
@@ -135,11 +135,19 @@ export function OrdersBoard({
 
   const send = useCallback(
     async (url: string, method: string, body: unknown): Promise<SaveResult> => {
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      } catch {
+        return {
+          ok: false,
+          error: 'Could not reach the tracker. Check your connection and try again.'
+        };
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         return {
@@ -217,8 +225,10 @@ export function OrdersBoard({
   }, [orders, board, today, isLateStep]);
 
   const filtering = q.trim() !== '' || statusFilter !== '' || dueOnly || lateOnly;
+  // Typing stays responsive on big boards: the list filters a beat behind the search box.
+  const deferredQ = useDeferredValue(q);
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = deferredQ.trim().toLowerCase();
     return orders.filter((o) => {
       if (statusFilter && o.status !== statusFilter) return false;
       if (lateOnly && !isLateStep(o)) return false;
@@ -238,7 +248,7 @@ export function OrdersBoard({
         o.owner
       ].some((v) => str(v).toLowerCase().includes(needle));
     });
-  }, [orders, q, statusFilter, dueOnly, lateOnly, board, today, isLateStep]);
+  }, [orders, deferredQ, statusFilter, dueOnly, lateOnly, board, today, isLateStep]);
 
   const groups = useMemo(() => {
     const map = new Map<string, Order[]>();
@@ -264,6 +274,16 @@ export function OrdersBoard({
       .filter((g) => map.has(g) || (!filtering && !board.view && known.includes(g)))
       .map((g) => ({ name: g, rows: map.get(g) ?? [] }));
   }, [filtered, filtering, board]);
+
+  // Bulk actions only touch ticked rows that are on screen (not ones hidden by a filter or a collapsed group).
+  const activeSelected = useMemo(() => {
+    const shown = new Set<string>();
+    for (const { name, rows } of groups) {
+      if (!filtering && collapsed.has(name)) continue;
+      for (const o of showAll.has(name) ? rows : rows.slice(0, ROW_CAP)) shown.add(o.id);
+    }
+    return new Set([...selected].filter((id) => shown.has(id)));
+  }, [groups, filtering, collapsed, showAll, selected]);
 
   const onStatusChange = useCallback(
     async (o: Order, status: string) => {
@@ -292,13 +312,20 @@ export function OrdersBoard({
   );
 
   async function runBulk(body: Record<string, unknown>, label: string) {
-    const ids = [...selected];
+    const ids = [...activeSelected];
     setBulkBusy(true);
-    const res = await fetch('/api/tracker/orders/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids, ...body })
-    });
+    let res: Response;
+    try {
+      res = await fetch('/api/tracker/orders/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, ...body })
+      });
+    } catch {
+      setBulkBusy(false);
+      toast.error('Could not reach the tracker. Check your connection and try again.');
+      return;
+    }
     const data = await res.json().catch(() => ({}));
     setBulkBusy(false);
     if (!res.ok) {
@@ -347,7 +374,7 @@ export function OrdersBoard({
                   render={<span />}
                   className='bg-destructive/15 text-destructive shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums'
                 >
-                  <span className='sr-only'>Late: </span>
+                  <span className='sr-only'>Late ({st.summary}): </span>
                   {st.daysLate > 0 ? `+${st.daysLate}d` : 'Late'}
                 </TooltipTrigger>
                 <TooltipContent>Late for this step · {st.summary}</TooltipContent>
@@ -412,7 +439,12 @@ export function OrdersBoard({
       cell: (o) => (
         <div className='flex min-w-0 items-center gap-2'>
           <div className='min-w-0 flex-1'>
-            <div className='truncate font-medium'>{main(o) || '—'}</div>
+            <button
+              type='button'
+              className='focus-visible:ring-ring block max-w-full truncate rounded-sm text-left font-medium outline-none hover:underline focus-visible:ring-2'
+            >
+              {main(o) || '—'}
+            </button>
             {sub(o) && <div className='text-muted-foreground truncate text-xs'>{sub(o)}</div>}
           </div>
           {o.updateCount ? (
@@ -513,7 +545,11 @@ export function OrdersBoard({
         storeCode,
         owner: currentPerson()
       })
-    });
+    }).catch(() => null);
+    if (!res) {
+      toast.error('Could not reach the tracker. Check your connection and try again.');
+      return;
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       toast.error(String(data.error ?? 'Could not add the order. Refresh the page and try again.'));
@@ -723,7 +759,7 @@ export function OrdersBoard({
                 aria-pressed={view === v}
                 onClick={() => void setUrl({ view: v === 'table' ? null : v })}
                 className={cn(
-                  'focus-visible:ring-ring/50 rounded-md px-3 py-1 text-sm outline-none focus-visible:ring-3',
+                  'focus-visible:ring-ring rounded-md px-3 py-1 text-sm outline-none focus-visible:ring-3',
                   view === v
                     ? 'bg-background font-medium shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -788,7 +824,7 @@ export function OrdersBoard({
                     className='flex items-center justify-between gap-2 px-3 py-2'
                     style={{ boxShadow: `inset 4px 0 0 ${color}` }}
                   >
-                    <CollapsibleTrigger className='hover:bg-muted/60 focus-visible:ring-ring/50 flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left outline-none focus-visible:ring-3'>
+                    <CollapsibleTrigger className='hover:bg-muted/60 focus-visible:ring-ring flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left outline-none focus-visible:ring-3'>
                       <Icons.chevronRight
                         aria-hidden
                         className={cn(
@@ -869,19 +905,8 @@ export function OrdersBoard({
                                 <TableRow
                                   key={o.id}
                                   data-state={isSel || o.id === openId ? 'selected' : undefined}
-                                  className='focus-visible:bg-muted/60 cursor-pointer outline-none [contain-intrinsic-size:auto_49px] [content-visibility:auto]'
-                                  tabIndex={0}
-                                  aria-label={`Open ${rowLabel(board, o)}`}
+                                  className='cursor-pointer [contain-intrinsic-size:auto_49px] [content-visibility:auto]'
                                   onClick={() => openOrder(o.id)}
-                                  onKeyDown={(e) => {
-                                    if (
-                                      (e.key === 'Enter' || e.key === ' ') &&
-                                      e.target === e.currentTarget
-                                    ) {
-                                      e.preventDefault();
-                                      openOrder(o.id);
-                                    }
-                                  }}
                                 >
                                   <TableCell
                                     className='w-10 py-2 pl-4'
@@ -927,9 +952,9 @@ export function OrdersBoard({
         </div>
       )}
 
-      {selected.size > 0 && view === 'table' && (
+      {activeSelected.size > 0 && view === 'table' && (
         <BulkBar
-          count={selected.size}
+          count={activeSelected.size}
           groups={groupNames}
           busy={bulkBusy}
           onClear={() => setSelected(new Set())}
@@ -1002,7 +1027,7 @@ function Stat({
         type='button'
         onClick={onClick}
         aria-pressed={active}
-        className='hover:bg-muted/50 focus-visible:ring-ring/50 rounded-xl py-4 text-left transition-colors outline-none focus-visible:ring-3'
+        className='hover:bg-muted/50 focus-visible:ring-ring rounded-xl py-4 text-left transition-colors outline-none focus-visible:ring-3'
       >
         {body}
       </button>

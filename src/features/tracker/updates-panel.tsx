@@ -100,16 +100,18 @@ export function UpdatesPanel({
 
   async function post(e: React.FormEvent) {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() || posting) return; // also stops Ctrl+Enter double posts
     setPosting(true);
     const res = await fetch(`/api/tracker/orders/${encodeURIComponent(orderId)}/updates`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, author })
-    });
-    const data = await res.json().catch(() => ({}));
+    }).catch(() => null);
+    const data = res
+      ? await res.json().catch(() => ({}))
+      : { error: 'Could not reach the tracker. Check your connection and try again.' };
     setPosting(false);
-    if (!res.ok) {
+    if (!res?.ok) {
       toast.error(
         String(data.error ?? 'Could not post the update. Refresh the page and try again.')
       );
